@@ -642,7 +642,7 @@ def test_approve_all_stale_draft_is_rejected(seed_ctx):
 
 
 def test_new_post_routes_require_csrf(ctx):
-    for path in ("/approve-all", "/grounds/pensioner/approve", "/grounds/pensioner/mark-review", "/params/min_wage/quick"):
+    for path in ("/approve-all", "/grounds/pensioner/approve-publish", "/publish-now", "/grounds/pensioner/mark-review", "/params/min_wage/quick"):
         assert ctx.client.post(path, data={"by": "x"}).status_code == 403, path
         assert ctx.client.post(path, data={"by": "x", "csrf_token": "bad"}).status_code == 403, path
 
@@ -659,23 +659,71 @@ def test_ground_list_card_and_edit_pages(ctx):
         assert text in lst, text
     card = ctx.client.get("/grounds/pensioner")
     assert card.status_code == 200
-    for text in ("Одобрить эту карточку", "Пометить: требует проверки", "Редактировать", "подтверждено"):
+    for text in ("Одобрить и опубликовать", "Пометить: требует проверки", "Редактировать", "подтверждено"):
         assert text in card.text, text
     edit = ctx.client.get("/grounds/pensioner/edit").text
     assert "Для эксперта" in edit and 'name="req-0-label"' in edit
 
 
-def test_approve_one_card_via_form(ctx):
+def test_approve_publish_button_publishes_card(ctx):
     edit_draft(ctx.conn, "ground", "pensioner", status="draft")
-    data = harvest(ctx.client.get("/grounds/pensioner").text, "/grounds/pensioner/approve")
+    html = ctx.client.get("/grounds/pensioner").text
+    assert "{param:" not in html
+    data = harvest(html, "/grounds/pensioner/approve-publish")
     setv(data, "by", "")
-    assert ctx.client.post("/grounds/pensioner/approve", data=data).status_code == 303
-    assert R.draft_item(ctx.conn, "ground", "pensioner")[0]["checked_by"] != "Анна"
+    r = ctx.client.post("/grounds/pensioner/approve-publish", data=data)  # без имени
+    assert r.status_code == 422 and "Укажите ваше имя" in r.text
+    assert R.active_snapshot(ctx.conn) is None
     setv(data, "by", "Анна")
-    assert ctx.client.post("/grounds/pensioner/approve", data=data).status_code == 303
+    r = ctx.client.post("/grounds/pensioner/approve-publish", data=data)
+    assert r.status_code == 303
     g = R.draft_item(ctx.conn, "ground", "pensioner")[0]
     assert g["checked_by"] == "Анна" and g["status"] == "published"
+    snap = R.active_snapshot(ctx.conn)
+    assert snap is not None and snap.bundle.ground("pensioner").status == "published"
+    page = ctx.client.get("/grounds/pensioner").text
+    assert f"Опубликовано. Бот уже использует версию №{snap.release_id}." in page
+    assert 'value="Анна"' in page  # имя запомнено в сессии
+
+
+def test_approve_publish_without_csrf_is_403(ctx):
+    assert ctx.client.post("/grounds/pensioner/approve-publish", data={"by": "x", "draft_revision": "1"}).status_code == 403
     assert R.active_snapshot(ctx.conn) is None
+
+
+def test_approve_publish_stale_revision(ctx):
+    data = harvest(ctx.client.get("/grounds/pensioner").text, "/grounds/pensioner/approve-publish")
+    setv(data, "by", "Анна")
+    edit_draft(ctx.conn, "ground", "nomad", title="Другое")
+    r = ctx.client.post("/grounds/pensioner/approve-publish", data=data)
+    assert r.status_code == 409 and "Пока вы смотрели, базу изменили" in r.text
+    assert R.active_snapshot(ctx.conn) is None
+
+
+def test_card_lists_what_owner_confirms(ctx):
+    item, rev = R.draft_item(ctx.conn, "ground", "nomad")
+    item["requirements"][0]["disputed"] = True
+    item["requirements"][0]["verified"] = False
+    R.save_draft_item(ctx.conn, "ground", item, "other", rev, "nomad")
+    html = ctx.client.get("/grounds/nomad").text
+    assert "Вы подтверждаете, что эти условия и цифры верны:" in html
+    assert "{param:" not in html
+
+
+def test_pending_strip_appears_after_edit_and_disappears_after_publish_now(ctx):
+    pub(ctx.conn)
+    assert "Опубликовать сейчас" not in ctx.client.get("/grounds").text
+    edit_draft(ctx.conn, "ground", "pensioner", title="Другое")
+    html = ctx.client.get("/grounds").text
+    assert "Есть изменения, которые бот ещё не видит: 1" in html and "Опубликовать сейчас" in html
+    data = harvest(html, "/publish-now")
+    assert ctx.client.post("/publish-now", data={"by": "Анна", "draft_revision": data["draft_revision"][0]}).status_code == 403
+    setv(data, "by", "")
+    assert ctx.client.post("/publish-now", data=data).status_code == 422  # без имени
+    setv(data, "by", "Анна")
+    assert ctx.client.post("/publish-now", data=data).status_code == 303
+    assert R.active_snapshot(ctx.conn).bundle.ground("pensioner").title == "Другое"
+    assert "Опубликовать сейчас" not in ctx.client.get("/grounds").text
 
 
 def test_mark_review_in_draft(ctx):

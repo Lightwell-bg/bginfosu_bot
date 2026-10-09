@@ -106,6 +106,93 @@ def approve_ground_draft(conn: sqlite3.Connection, ground_id: str, by: str, now:
     return GroundApproval(data.get("title", ground_id), disputed)
 
 
+def _ground_params(kb, g) -> set[str]:
+    """Показатели, которые использует основание: в условиях и плейсхолдерах, с учётом производных."""
+    from bginfo.kb import validate as V
+
+    used: set[str] = set()
+    for _, c in V.ground_conditions(g):
+        used |= V.params_in_condition(c)
+    for _, t in V.ground_texts(g):
+        used |= set(V.PLACEHOLDER.findall(t or ""))
+    return {p for p in V.param_closure(kb, used) if kb.param(p) is not None}
+
+
+def pending_confirmations(kb, ground_id: str, as_of: date) -> tuple[list[str], list[str]]:
+    """Что владелец подтверждает кнопкой «Одобрить и опубликовать».
+
+    Возвращает (условия, цифры): условия — спорные или неподтверждённые (label с подставленными суммами),
+    цифры — «название: значение» для показателей карточки с хотя бы одним непроверенным значением.
+    """
+    from bginfo.engine.result import render_text
+
+    g = kb.ground(ground_id)
+    if g is None:
+        return [], []
+    reqs = [render_text(r.label, kb, as_of) for r in g.requirements if r.disputed or not r.verified]
+    params = []
+    for pid in sorted(_ground_params(kb, g)):
+        p = kb.param(pid)
+        if any(not v.verified for v in p.values):
+            params.append(f"{p.label}: {render_text('{param:' + pid + '}', kb, as_of)}")
+    return reqs, params
+
+
+def approve_ground_and_publish(conn: sqlite3.Connection, ground_id: str, by: str, now: datetime | None = None,
+                               today: date | None = None, expected_draft_revision: int | None = None,
+                               ) -> tuple[int, list[str], list[str]]:
+    """Подтвердить ВСЕ требования карточки и её цифры, сделать основание «опубликовано» и выпустить версию.
+
+    Всё в одной транзакции: ошибка публикации откатывает и изменения карточки.
+    Возвращает (номер выпуска, подписи подтверждённых спорных требований, названия подтверждённых цифр).
+    """
+    by = by.strip()
+    if not by:
+        raise R.PublishError("укажите, кто одобряет (имя)")
+    now = now or utcnow()
+    now_s = iso(now)
+    day = (today or now.date()).isoformat()
+    confirmed_disputed: list[str] = []
+    confirmed_params: list[str] = []
+    with write_tx(conn):
+        if expected_draft_revision is not None and R.draft_revision(conn) != expected_draft_revision:
+            raise R.ConcurrentEdit("черновик изменился после показа страницы — обновите её")
+        row = conn.execute("SELECT data FROM kb_draft_items WHERE kind='ground' AND item_id=?", (ground_id,)).fetchone()
+        if row is None:
+            raise R.PublishError(f"основания «{ground_id}» нет в черновике")
+        data = json.loads(row["data"])
+        if data.get("status") == "disabled":
+            raise R.PublishError("основание отключено: сначала включите его")
+        kb = R.load_draft(conn)
+        param_ids = _ground_params(kb, kb.ground(ground_id))
+        rev = R.draft_revision(conn)
+
+        for r in data.get("requirements", []):
+            if r.get("disputed"):
+                confirmed_disputed.append(r.get("label") or r["id"])
+            r.update(verified=True, verified_by=by, verified_at=day, disputed=False, dispute_reason="")
+        data.update(status="published", review_reason="", checked_by=by, checked_at=day)
+        rev += 1
+        _store(conn, "ground", ground_id, data, rev, now, by)
+
+        for prow in conn.execute("SELECT item_id, data FROM kb_draft_items WHERE kind='parameter'").fetchall():
+            pdata = json.loads(prow["data"])
+            if pdata.get("id") not in param_ids:
+                continue
+            if any(not v.get("verified") for v in pdata.get("values", [])):
+                confirmed_params.append(pdata.get("label", pdata["id"]))
+                for v in pdata.get("values", []):
+                    v["verified"] = True
+                rev += 1
+                _store(conn, "parameter", prow["item_id"], pdata, rev, now, by)
+        conn.execute("UPDATE kb_draft_meta SET revision=? WHERE id=1", (rev,))
+        R._audit(conn, by, "approve_ground_publish", ground_id,
+                 f"disputed={len(confirmed_disputed)}; params={len(confirmed_params)}")
+        release_id = R._publish_in_tx(conn, by, now_s, f"Одобрено и опубликовано: {data.get('title', ground_id)} ({by})",
+                                      now_s, None)
+    return release_id, confirmed_disputed, confirmed_params
+
+
 def approve_all_and_publish(conn: sqlite3.Connection, by: str, now: datetime | None = None,
                             today: date | None = None,
                             expected_draft_revision: int | None = None) -> ApproveSummary:

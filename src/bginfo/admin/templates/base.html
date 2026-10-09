@@ -36,6 +36,18 @@
   </form>
 </header>
 {% endif %}
+{% if user and pending_changes %}
+<div class="pending-strip alert warn" role="status">
+  <form method="post" action="/publish-now" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <input type="hidden" name="draft_revision" value="{{ pending_rev }}">
+    <strong>Есть изменения, которые бот ещё не видит: {{ pending_changes }}</strong>
+    <input name="by" value="{{ approver_name }}" required maxlength="100" placeholder="Ваше имя" aria-label="Ваше имя">
+    <button type="submit">Опубликовать сейчас</button>
+    <a href="/publish">Посмотреть изменения</a>
+  </form>
+</div>
+{% endif %}
 <main>
   {% for level, text in flashes %}<div class="alert {{ 'error' if level == 'error' else 'ok' }}">{{ text }}</div>{% endfor %}
   {% block content %}{% endblock %}

@@ -8,17 +8,19 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
 
 from bginfo.admin.auth import PostCtx, post_ctx
-from bginfo.admin.common import flash, get_conn, redirect
+from bginfo.admin.common import flash, get_conn, issue_lines, redirect, render
 from bginfo.admin.crud import Spec, register_crud
 from bginfo.admin.forms import parse_ground, ru_errors
 from bginfo.kb import model as m
-from bginfo.kb.approve import approve_ground_draft
+from bginfo.kb.approve import approve_ground_and_publish, pending_confirmations
 from bginfo.kb.releases import (
     ConcurrentEdit,
     PublishError,
     _apply_flag,
     active_snapshot,
     draft_item,
+    draft_revision,
+    load_draft,
     save_draft_item,
 )
 
@@ -69,11 +71,15 @@ def _card_ctx(conn: sqlite3.Connection, draft: m.Bundle, item: dict, revision: i
 
     snap = active_snapshot(conn)
     in_active = bool(snap and snap.bundle.ground(item["id"]))
-    reqs = [{"label": r.get("label") or r.get("id"), "badge": _req_state(r)} for r in item.get("requirements", [])]
     today = date.today()  # noqa: DTZ011 - календарная дата для подстановки значений
+    reqs = [{"label": render_text(r.get("label") or r.get("id"), draft, today), "badge": _req_state(r)}
+            for r in item.get("requirements", [])]
+    confirm_reqs, confirm_params = pending_confirmations(draft, item["id"], today)
     return {"summary": render_text(item.get("summary", ""), draft, today), "reqs": reqs, "in_active": in_active,
             "steps": [render_text(x, draft, today) for x in item.get("steps", [])],
-            "documents": [render_text(x, draft, today) for x in item.get("documents", [])]}
+            "documents": [render_text(x, draft, today) for x in item.get("documents", [])],
+            "restrictions": [render_text(x.get("text", ""), draft, today) for x in item.get("restrictions", [])],
+            "confirm_reqs": confirm_reqs, "confirm_params": confirm_params, "draft_rev": draft_revision(conn)}
 
 
 def _form_ctx(draft: m.Bundle, item: dict, is_new: bool) -> dict:
@@ -99,28 +105,36 @@ def _rev(form) -> int | None:
     return int(raw) if raw.isdigit() else None
 
 
-@router.post("/grounds/{gid}/approve")
-def approve_one(request: Request, gid: str, p: PostCtx = Depends(post_ctx),
-                conn: sqlite3.Connection = Depends(get_conn)):
-    """Одобрить одну карточку в черновике (без публикации)."""
+def _card_response(request: Request, conn: sqlite3.Connection, gid: str, errors: list[str], status: int):
+    """Карточка с красным блоком ошибок (после неудачной публикации)."""
+    cur = draft_item(conn, "ground", gid)
+    if cur is None:
+        raise HTTPException(404, f"Не найдено: {gid}")
+    return render(request, "ground_card.html", status_code=status, spec=SPEC, item=cur[0], revision=cur[1],
+                  errors=errors, **_card_ctx(conn, load_draft(conn), cur[0], cur[1]))
+
+
+@router.post("/grounds/{gid}/approve-publish")
+def approve_publish(request: Request, gid: str, p: PostCtx = Depends(post_ctx),
+                    conn: sqlite3.Connection = Depends(get_conn)):
+    """Одобрить карточку и сразу опубликовать: бот начинает использовать её немедленно."""
     by = str(p.form.get("by", "")).strip()
-    rev = _rev(p.form)
+    raw_rev = str(p.form.get("draft_revision", "")).strip()
     if not by:
-        flash(request, "Укажите ваше имя, чтобы одобрить карточку.", "error")
-        return redirect(f"/grounds/{gid}")
-    if rev is None:
-        flash(request, "Не передана версия карточки: обновите страницу.", "error")
-        return redirect(f"/grounds/{gid}")
+        return _card_response(request, conn, gid, ["Укажите ваше имя: оно запишется как «кем подтверждено»."], 422)
+    if len(by) > 100:
+        return _card_response(request, conn, gid, ["Имя слишком длинное: не больше 100 символов."], 422)
+    if not raw_rev.isdigit():
+        return _card_response(request, conn, gid, ["Не передана версия черновика: обновите страницу."], 422)
     try:
-        res = approve_ground_draft(conn, gid, by[:100], expected_revision=rev)
-    except (PublishError, ConcurrentEdit) as e:
-        flash(request, f"Не удалось одобрить: {e}", "error")
-        return redirect(f"/grounds/{gid}")
-    if res.disputed:
-        flash(request, f"Карточка «{res.title}» одобрена, но требует проверки: не подтверждено "
-                       f"{'; '.join(res.disputed)}. Бот предложит индивидуальный разбор. Изменения в черновике.")
-    else:
-        flash(request, f"Карточка «{res.title}» одобрена. Бот увидит её после публикации.")
+        rid, _, _ = approve_ground_and_publish(conn, gid, by, expected_draft_revision=int(raw_rev))
+    except ConcurrentEdit:
+        return _card_response(request, conn, gid, ["Пока вы смотрели, базу изменили. Обновите страницу."], 409)
+    except PublishError as e:
+        lines = issue_lines(e.issues, load_draft(conn)) or [str(e)]
+        return _card_response(request, conn, gid, [f"Не удалось опубликовать: {e}", *lines], 422)
+    request.session["approver_name"] = by
+    flash(request, f"Опубликовано. Бот уже использует версию №{rid}.")
     return redirect(f"/grounds/{gid}")
 
 

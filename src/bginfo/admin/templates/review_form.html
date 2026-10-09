@@ -11,7 +11,7 @@
   <fieldset>
     <legend>Спорные требования (необязательно; без выбора спорным считается всё основание)</legend>
     {% for r in g.requirements %}
-      <label class="check"><input type="checkbox" name="requirement_ids" value="{{ r.id }}" {{ 'checked' if r.id in chosen }}> <code>{{ r.id }}</code> — {{ r.label }}</label>
+      <label class="check"><input type="checkbox" name="requirement_ids" value="{{ r.id }}" {{ 'checked' if r.id in chosen }}> <code>{{ r.id }}</code> — {{ r.label | render_params }}</label>
     {% endfor %}
   </fieldset>
   <button type="submit">Пометить и выпустить</button>

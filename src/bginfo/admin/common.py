@@ -138,6 +138,19 @@ def _fmt_val(v) -> str:
     return json.dumps(v, ensure_ascii=False, sort_keys=True)
 
 
+@jinja2.pass_context
+def _render_params(ctx, text):
+    """Подставить значения показателей вместо {param:id}; бандл — черновик (ctx['draft_bundle'])."""
+    from datetime import date
+
+    from bginfo.engine.result import render_text
+
+    bundle = ctx.get("draft_bundle")
+    if bundle is None or not isinstance(text, str):
+        return text
+    return render_text(text, bundle, date.today())  # noqa: DTZ011 - календарная дата для подстановки
+
+
 def make_env(tz: ZoneInfo) -> jinja2.Environment:
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(str(PKG_DIR / "templates")),
@@ -149,6 +162,7 @@ def make_env(tz: ZoneInfo) -> jinja2.Environment:
     env.filters["local_dt"] = _local_dt(tz)
     env.filters["local_date"] = lambda v: _local_dt(tz)(v).split(" ")[0]
     env.filters["fmt_val"] = _fmt_val
+    env.filters["render_params"] = _render_params
     env.filters["field_ru"] = lambda k: FIELD_RU.get(k, k)
     env.filters["ground_status"] = lambda s: GROUND_STATUS_RU.get(s, s)
     env.filters["badge"] = lambda st: GROUND_BADGE.get(st, (st, "gray"))
@@ -169,6 +183,38 @@ def flash(request: Request, message: str, level: str = "ok") -> None:
     request.session["flash"] = [*request.session.get("flash", []), [level, message]]
 
 
+def issue_lines(issues, draft=None) -> list[str]:
+    """Ошибки проверки как строки; «основание <id>» заменяется на «основание «Название» (<id>)»."""
+    import re
+
+    titles = {g.id: g.title for g in draft.grounds} if draft is not None else {}
+
+    def fix(where: str) -> str:
+        return re.sub(r"основание ([A-Za-z0-9_]+)",
+                      lambda mt: f"основание «{titles[mt.group(1)]}» ({mt.group(1)})" if mt.group(1) in titles
+                      else mt.group(0), where)
+
+    return [f"{fix(i.where)}: {i.message}" for i in issues]
+
+
+def _draft_context(st: AdminState) -> dict:
+    """Черновик для подстановки значений и число изменений, которых бот ещё не видит (для жёлтой полосы)."""
+    from bginfo.kb.releases import active_snapshot, diff_bundles, draft_revision, load_draft
+
+    try:
+        conn = connect(st.db_path)
+        try:
+            rev = draft_revision(conn)  # ревизию читаем ДО черновика
+            draft = load_draft(conn)
+            snap = active_snapshot(conn)
+            diff = diff_bundles(snap.bundle if snap else None, draft)
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001 - полоса не должна ломать страницу
+        return {}
+    return {"draft_bundle": draft, "pending_changes": len(diff), "pending_rev": rev}
+
+
 def render(request: Request, name: str, status_code: int = 200, **ctx) -> HTMLResponse:
     st = get_state(request)
     sess = request.session
@@ -176,7 +222,10 @@ def render(request: Request, name: str, status_code: int = 200, **ctx) -> HTMLRe
     base = {
         "request": request, "user": sess.get("u"), "csrf": sess.get("csrf", ""), "flashes": flashes,
         "app_mode": st.settings.APP_MODE, "tz_name": str(st.tz),
+        "draft_bundle": None, "pending_changes": 0, "pending_rev": 0, "approver_name": sess.get("approver_name", ""),
     }
+    if base["user"]:
+        base.update(_draft_context(st))
     html = st.env.get_template(name).render(**base, **ctx)
     resp = HTMLResponse(html, status_code=status_code)
     resp.headers["Cache-Control"] = "no-store"

@@ -6,10 +6,10 @@
 {{ page_hint("Проверьте список ниже. Если ошибок нет — нажмите «Опубликовать»: бот сразу начнёт отвечать по новой версии.") }}
 
 {% if errors %}<div class="alert error" role="alert"><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
-{% if publish_issues %}
+{% if publish_lines %}
 <div class="alert error" role="alert">
   <strong>Публикация отклонена, найдены ошибки:</strong>
-  <ul>{% for i in publish_issues %}<li>{{ i.where }}: {{ i.message }}</li>{% endfor %}</ul>
+  <ul>{% for line in publish_lines %}<li>{{ line }}</li>{% endfor %}</ul>
 </div>
 {% endif %}
 

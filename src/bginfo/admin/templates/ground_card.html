@@ -2,13 +2,14 @@
 {% from "_macros.html" import csrf_field, page_hint, status_badge with context %}
 {% block title %}{{ item.title }}{% endblock %}
 {% block content %}
-<h1>{{ item.title }}</h1>
-{{ page_hint("Проверьте условия. Если всё верно — «Одобрить эту карточку». Бот увидит изменения только после публикации.") }}
+<h1>{{ item.title | render_params }}</h1>
+{% if errors %}<div class="alert error" role="alert"><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+{{ page_hint("Проверьте условия. Если всё верно — «Одобрить и опубликовать»: бот сразу начнёт использовать карточку.") }}
 <p><a href="/grounds">← к списку оснований</a></p>
 
 <section class="card">
   <p>{{ status_badge(item.status) }} <span class="tech">{{ item.id }}</span></p>
-  {% if item.status == 'needs_review' and item.review_reason %}<p class="alert warn">Причина: {{ item.review_reason }}</p>{% endif %}
+  {% if item.status == 'needs_review' and item.review_reason %}<p class="alert warn">Причина: {{ item.review_reason | render_params }}</p>{% endif %}
   <p class="summary-text">{{ summary or 'Описание не заполнено.' }}</p>
 
   <h2>Условия</h2>
@@ -21,6 +22,7 @@
   </ul>
   {% if steps %}<h2>Шаги</h2><ol>{% for x in steps %}<li>{{ x }}</li>{% endfor %}</ol>{% endif %}
   {% if documents %}<h2>Документы</h2><ul>{% for x in documents %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+  {% if restrictions %}<h2>Ограничения</h2><ul>{% for x in restrictions %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
 </section>
 
 <section class="card">
@@ -28,12 +30,22 @@
   <div class="action-row">
     <a class="button" href="/grounds/{{ item.id }}/edit">Редактировать</a>
   </div>
-  <form method="post" action="/grounds/{{ item.id }}/approve" class="edit inline-form">
+  <form method="post" action="/grounds/{{ item.id }}/approve-publish" class="edit inline-form">
+    <h3>Одобрить и опубликовать</h3>
     {{ csrf_field() }}
-    <input type="hidden" name="revision" value="{{ revision }}">
-    <label>Ваше имя <input name="by" required maxlength="100" placeholder="например, Иван Петров"></label>
-    <button type="submit">Одобрить эту карточку</button>
-    <p class="muted small">Подтверждённые условия получат отметку «подтверждено» с вашим именем. Не подтверждённые источником условия станут «спорными», а карточка — «требует проверки».</p>
+    <input type="hidden" name="draft_revision" value="{{ draft_rev }}">
+    {% if confirm_reqs or confirm_params %}
+    <div class="confirm-list">
+      <p><strong>Вы подтверждаете, что эти условия и цифры верны:</strong></p>
+      <ul>
+        {% for t in confirm_reqs %}<li>{{ t }}</li>{% endfor %}
+        {% for t in confirm_params %}<li>{{ t }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    <label>Ваше имя <input name="by" required maxlength="100" value="{{ approver_name }}" placeholder="например, Иван Петров"></label>
+    <button type="submit" class="primary-big blue">Одобрить и опубликовать</button>
+    <p class="muted small">Карточка станет «опубликована», все её условия и цифры получат отметку «подтверждено» с вашим именем, и бот сразу начнёт её использовать.</p>
   </form>
   <form method="post" action="/grounds/{{ item.id }}/mark-review" class="edit inline-form">
     {{ csrf_field() }}

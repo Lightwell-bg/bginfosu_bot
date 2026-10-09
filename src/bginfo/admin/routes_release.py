@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from bginfo.admin.auth import PostCtx, current_user, post_ctx
-from bginfo.admin.common import flash, get_conn, get_state, redirect, render
+from bginfo.admin.common import flash, get_conn, get_state, issue_lines, redirect, render
 from bginfo.db.conn import iso, utcnow
 from bginfo.kb import model as m
 from bginfo.kb.releases import (
@@ -51,7 +51,7 @@ def _publish_page(request: Request, conn: sqlite3.Connection, status: int = 200,
     return render(
         request, "publish.html", status_code=status, issues=issues, has_errors=any(i.level == "error" for i in issues),
         diff=diff, draft_rev=rev, active=snap, errors=errors or [], publish_issues=publish_issues or [],
-        values=form_values or {},
+        values=form_values or {}, publish_lines=issue_lines(publish_issues or [], draft),
     )
 
 
@@ -81,6 +81,30 @@ def publish_submit(request: Request, p: PostCtx = Depends(post_ctx), conn: sqlit
         return _publish_page(request, conn, 422, [str(e)], e.issues, values)
     flash(request, f"Версия №{rid} опубликована.")
     return redirect("/history")
+
+
+@router.post("/publish-now")
+def publish_now(request: Request, p: PostCtx = Depends(post_ctx), conn: sqlite3.Connection = Depends(get_conn)):
+    """Опубликовать черновик сразу (кнопка в жёлтой полосе). Имя — из формы или из сессии."""
+    form = p.form
+    by = str(form.get("by", "")).strip() or str(request.session.get("approver_name", "")).strip()
+    if not by:
+        return _publish_page(request, conn, 422, ["Укажите ваше имя: оно запишется в историю версий."])
+    if len(by) > 100:
+        return _publish_page(request, conn, 422, ["Имя слишком длинное: не больше 100 символов."])
+    raw_rev = str(form.get("draft_revision", "")).strip()
+    if not raw_rev.isdigit():
+        return _publish_page(request, conn, 422, ["Не передана версия черновика: откройте страницу заново."])
+    try:
+        rid = publish_draft(conn, by, None, "Опубликовано кнопкой «Опубликовать сейчас»",
+                            expected_draft_revision=int(raw_rev))
+    except ConcurrentEdit:
+        return _publish_page(request, conn, 409, ["Пока вы смотрели, базу изменили. Обновите страницу."])
+    except PublishError as e:
+        return _publish_page(request, conn, 422, [str(e)], e.issues)
+    request.session["approver_name"] = by
+    flash(request, f"Опубликовано. Бот уже использует версию №{rid}.")
+    return redirect("/")
 
 
 # --------------------------------------------------------------------------- history

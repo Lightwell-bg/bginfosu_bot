@@ -128,7 +128,7 @@ def register_crud(router: APIRouter, spec: Spec) -> None:
         errors, conflict = save(conn, item, p.user, int(raw_rev), item_id)
         if errors:
             return page(request, conn, item, raw_rev, errors, raw, False, 409 if conflict else 422, conflict)
-        flash(request, "Сохранено в черновике. Бот увидит изменения только после публикации.")
+        flash(request, "Сохранено. Чтобы бот увидел изменения — нажмите «Опубликовать сейчас» вверху страницы.")
         return redirect(f"{base}/{item_id}")
 
     def delete(request: Request, item_id: str, p: PostCtx = Depends(post_ctx),

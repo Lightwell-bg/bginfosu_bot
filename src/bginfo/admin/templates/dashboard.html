@@ -26,13 +26,6 @@
 </div>
 {% endif %}
 
-{% if dirty %}
-<div class="status-box warn">
-  <p class="status-line">Есть изменения, которые бот ещё не видит: {{ changes }}</p>
-  <p><a class="button" href="/publish">Посмотреть и опубликовать</a></p>
-</div>
-{% endif %}
-
 {% if can_approve_all %}
 <section class="card approve-card">
   <h2>Одобрить всё и опубликовать</h2>

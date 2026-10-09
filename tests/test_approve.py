@@ -8,7 +8,13 @@ import pytest
 
 from bginfo.db.conn import open_db
 from bginfo.kb import releases as R
-from bginfo.kb.approve import ApproveSummary, approve_all_and_publish, approve_ground_draft, render_summary
+from bginfo.kb.approve import (
+    ApproveSummary,
+    approve_all_and_publish,
+    approve_ground_and_publish,
+    approve_ground_draft,
+    render_summary,
+)
 from bginfo.seed.__main__ import main as seed_main
 from bginfo.seed.loader import load_seed_bundle
 
@@ -145,3 +151,41 @@ def test_manually_disputed_requirement_is_not_verified(conn):
     summary = approve_all_and_publish(conn, "Анна")
     assert any(data["title"] in s for s in summary.needs_review)
     assert data["title"] not in summary.published
+
+
+def test_approve_ground_and_publish_digital_nomad_disputed_income(conn):
+    item, rev = R.draft_item(conn, "ground", "digital_nomad")
+    item["requirements"][0]["disputed"] = True
+    item["requirements"][0]["dispute_reason"] = "спорно"
+    R.save_draft_item(conn, "ground", item, "admin", rev)
+    rid, disputed, params = approve_ground_and_publish(conn, "digital_nomad", " Анна ")
+    assert len(disputed) == 1 and params
+    data, _ = R.draft_item(conn, "ground", "digital_nomad")
+    assert data["status"] == "published" and data["review_reason"] == "" and data["checked_by"] == "Анна"
+    assert all(r["verified"] and not r["disputed"] and r["dispute_reason"] == "" for r in data["requirements"])
+    snap = R.active_snapshot(conn)
+    assert snap.release_id == rid
+    g = snap.bundle.ground("digital_nomad")
+    assert g.status == "published" and not any(r.disputed for r in g.requirements)
+    assert all(v.verified for p in snap.bundle.parameters if p.label in params for v in p.values)
+
+
+def test_approve_ground_and_publish_rolls_back_on_publish_error(conn):
+    from datetime import UTC, datetime, timedelta
+    t0 = datetime(2026, 10, 9, 12, 0, tzinfo=UTC)
+    approve_all_and_publish(conn, "Первый", now=t0)
+    R.publish_draft(conn, "Первый", effective_from=t0 + timedelta(days=1), now=t0)  # запланированный выпуск мешает
+    before = _draft_state(conn)
+    releases = len(R.list_releases(conn))
+    with pytest.raises(R.PublishError):
+        approve_ground_and_publish(conn, "digital_nomad", "Второй", now=t0)
+    assert _draft_state(conn) == before
+    assert len(R.list_releases(conn)) == releases
+
+
+def test_approve_ground_and_publish_requires_name_and_fresh_revision(conn):
+    with pytest.raises(R.PublishError):
+        approve_ground_and_publish(conn, "digital_nomad", " ")
+    with pytest.raises(R.ConcurrentEdit):
+        approve_ground_and_publish(conn, "digital_nomad", "Анна", expected_draft_revision=R.draft_revision(conn) - 1)
+    assert R.active_snapshot(conn) is None

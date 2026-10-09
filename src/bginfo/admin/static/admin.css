@@ -106,3 +106,9 @@ details.expert.sub { margin:10px 0 6px; background:#fff; }
 form.one-line { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; margin:0; }
 form.one-line input:not([type=checkbox]) { width:auto; }
 .summary-text { font-size:1.05em; white-space:pre-wrap; }
+
+.pending-strip { margin:0; border-radius:0; border-width:0 0 1px; }
+.pending-strip .inline-form { background:transparent; border:0; padding:0; margin:0; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.pending-strip input { max-width:220px; }
+.confirm-list { color:#7a5800; background:var(--warn); border:1px solid #ecd48a; border-radius:6px; padding:8px 14px; }
+button.primary-big.blue { background:#1a5fd0; color:#fff; border-color:#1a5fd0; }
