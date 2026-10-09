@@ -39,6 +39,11 @@ class Spec:
     list_ctx: Callable[[sqlite3.Connection, m.Bundle], dict]
     form_ctx: Callable[[m.Bundle, dict, bool], dict]
     id_field: str = "id"
+    list_template: str = "kb_list.html"
+    hint: str = ""                  # строка «что здесь делать» под заголовком списка
+    # Если задан card_ctx: GET base/{id} показывает карточку (сводку), а форма правки живёт на base/{id}/edit
+    card_template: str | None = None
+    card_ctx: Callable[[sqlite3.Connection, m.Bundle, dict, int], dict] | None = None
 
 
 def kb_ctx(draft: m.Bundle) -> dict[str, Any]:
@@ -71,14 +76,14 @@ def register_crud(router: APIRouter, spec: Spec) -> None:
             save_draft_item(conn, spec.kind, item, user, expected, old_id)
             return [], False
         except ValidationError as e:
-            return ru_errors(e), False
+            return ru_errors(e, str(item.get("title") or item.get("label") or item.get("text") or "")), False
         except ConcurrentEdit as e:
             return ([CONFLICT_MSG], True) if expected is not None else ([f"{spec.one.capitalize()}: {e}"], False)
         except PublishError as e:
             return [str(e)], False
 
     def list_page(request: Request, user: str = Depends(current_user), conn: sqlite3.Connection = Depends(get_conn)):
-        return render(request, "kb_list.html", spec=spec, **spec.list_ctx(conn, load_draft(conn)))
+        return render(request, spec.list_template, spec=spec, **spec.list_ctx(conn, load_draft(conn)))
 
     def new_page(request: Request, user: str = Depends(current_user), conn: sqlite3.Connection = Depends(get_conn)):
         return page(request, conn, spec.new_item(), "", [], {}, True)
@@ -100,6 +105,15 @@ def register_crud(router: APIRouter, spec: Spec) -> None:
         if cur is None:
             raise HTTPException(404, f"Не найдено: {item_id}")
         return page(request, conn, cur[0], cur[1], [], {}, False)
+
+    def card_page(request: Request, item_id: str, user: str = Depends(current_user),
+                  conn: sqlite3.Connection = Depends(get_conn)):
+        cur = draft_item(conn, spec.kind, item_id)
+        if cur is None:
+            raise HTTPException(404, f"Не найдено: {item_id}")
+        assert spec.card_ctx is not None
+        return render(request, spec.card_template, spec=spec, item=cur[0], revision=cur[1],
+                      **spec.card_ctx(conn, load_draft(conn), cur[0], cur[1]))
 
     def edit_save(request: Request, item_id: str, p: PostCtx = Depends(post_ctx),
                   conn: sqlite3.Connection = Depends(get_conn)):
@@ -131,6 +145,10 @@ def register_crud(router: APIRouter, spec: Spec) -> None:
     router.add_api_route(base, list_page, methods=["GET"])
     router.add_api_route(f"{base}/_new", new_page, methods=["GET"])
     router.add_api_route(f"{base}/_new", create, methods=["POST"])
-    router.add_api_route(f"{base}/{{item_id}}", edit_page, methods=["GET"])
+    if spec.card_ctx is not None:
+        router.add_api_route(f"{base}/{{item_id}}", card_page, methods=["GET"])
+        router.add_api_route(f"{base}/{{item_id}}/edit", edit_page, methods=["GET"])
+    else:
+        router.add_api_route(f"{base}/{{item_id}}", edit_page, methods=["GET"])
     router.add_api_route(f"{base}/{{item_id}}", edit_save, methods=["POST"])
     router.add_api_route(f"{base}/{{item_id}}/delete", delete, methods=["POST"])

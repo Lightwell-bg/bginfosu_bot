@@ -23,15 +23,14 @@ services:
   admin:
     <<: *common
     command: ["python", "-m", "bginfo.admin"]
-    environment:
-      DB_PATH: /data/app.db
-      CONFIG_INI: /app/config.ini
-      ADMIN_HOST: 0.0.0.0
-    ports:
-      # Порт на хосте задаётся ADMIN_PORT в .env (если 8080 занят другим сервисом)
-      - "127.0.0.1:${ADMIN_PORT:-8080}:8080"
+    # сеть хоста: админка слушает host:port из config.ini прямо на сервере
+    network_mode: host
+    volumes:
+      - bginfo_data:/data
+      # без :ro — админка правит host/port через страницу «Доступ к админке»
+      - ./config.ini:/app/config.ini
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3).status == 200 else 1)"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys,pathlib; p=pathlib.Path('/tmp/bginfo_admin_port').read_text().strip(); sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{p}/healthz', timeout=3).status==200 else 1)"]
       interval: 30s
       timeout: 5s
       retries: 3

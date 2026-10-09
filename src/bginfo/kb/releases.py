@@ -271,19 +271,25 @@ def publish_draft(
     now_s = iso(now or utcnow())
     eff = iso(effective_from) if effective_from else now_s
     with write_tx(conn):
-        if expected_draft_revision is not None and draft_revision(conn) != expected_draft_revision:
-            raise ConcurrentEdit("черновик изменился после проверки — откройте сравнение заново")
-        bundle = load_draft(conn)
-        errs = errors(validate(bundle))
-        if errs:
-            raise PublishError("черновик не прошёл проверку", errs)
-        _check_schedule(conn, eff, now_s)
-        base = conn.execute(
-            "SELECT id FROM kb_releases WHERE status='published' AND effective_from<=? ORDER BY effective_from DESC, id DESC LIMIT 1",
-            (now_s,),
-        ).fetchone()
-        return _insert_release(conn, bundle, user, eff, "demo" if bundle.demo else "publish", comment,
-                               base["id"] if base else None)
+        return _publish_in_tx(conn, user, eff, comment, now_s, expected_draft_revision)
+
+
+def _publish_in_tx(conn: sqlite3.Connection, user: str, eff: str, comment: str, now_s: str,
+                   expected_draft_revision: int | None) -> int:
+    """Публикация внутри уже открытой транзакции (проверка ревизии, валидация, расписание, вставка)."""
+    if expected_draft_revision is not None and draft_revision(conn) != expected_draft_revision:
+        raise ConcurrentEdit("черновик изменился после проверки — откройте сравнение заново")
+    bundle = load_draft(conn)
+    errs = errors(validate(bundle))
+    if errs:
+        raise PublishError("черновик не прошёл проверку", errs)
+    _check_schedule(conn, eff, now_s)
+    base = conn.execute(
+        "SELECT id FROM kb_releases WHERE status='published' AND effective_from<=? ORDER BY effective_from DESC, id DESC LIMIT 1",
+        (now_s,),
+    ).fetchone()
+    return _insert_release(conn, bundle, user, eff, "demo" if bundle.demo else "publish", comment,
+                           base["id"] if base else None)
 
 
 def cancel_scheduled(conn: sqlite3.Connection, rid: int, user: str, now: datetime | None = None) -> None:

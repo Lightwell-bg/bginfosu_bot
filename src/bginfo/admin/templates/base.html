@@ -14,15 +14,21 @@
   <nav>
     <a href="/">Главная</a>
     <a href="/grounds">Основания</a>
-    <a href="/params">Показатели</a>
-    <a href="/facts">Факты</a>
-    <a href="/questions">Вопросы</a>
-    <a href="/sources">Источники</a>
-    <a href="/publish">Проверка и публикация</a>
+    <a href="/params">Цифры и суммы</a>
+    <a href="/publish">Опубликовать изменения</a>
     <a href="/history">История</a>
-    <a href="/needs-review">Требует проверки</a>
-    <a href="/preview">Тестовая анкета</a>
-    <a href="/stats">Статистика</a>
+    <details class="more">
+      <summary>Ещё ▾</summary>
+      <div class="more-list">
+        <a href="/facts">Факты</a>
+        <a href="/questions">Вопросы</a>
+        <a href="/sources">Источники</a>
+        <a href="/needs-review">Срочно: требует проверки</a>
+        <a href="/preview">Тестовая анкета</a>
+        <a href="/stats">Статистика</a>
+        <a href="/access">Доступ к админке</a>
+      </div>
+    </details>
   </nav>
   <form method="post" action="/logout" class="logout">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">

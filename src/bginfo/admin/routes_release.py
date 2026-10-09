@@ -79,7 +79,7 @@ def publish_submit(request: Request, p: PostCtx = Depends(post_ctx), conn: sqlit
                              form_values=values)
     except PublishError as e:
         return _publish_page(request, conn, 422, [str(e)], e.issues, values)
-    flash(request, f"Выпуск №{rid} опубликован.")
+    flash(request, f"Версия №{rid} опубликована.")
     return redirect("/history")
 
 
@@ -110,7 +110,7 @@ def release_view(request: Request, rid: int, user: str = Depends(current_user),
     row = conn.execute("SELECT id, created_at, created_by, effective_from, status, kind, comment "
                        "FROM kb_releases WHERE id=?", (rid,)).fetchone()
     if row is None:
-        raise HTTPException(404, f"Выпуск №{rid} не найден")
+        raise HTTPException(404, f"Версия №{rid} не найдена")
     prev = conn.execute("SELECT id FROM kb_releases WHERE id<? AND status='published' ORDER BY id DESC LIMIT 1",
                         (rid,)).fetchone()
     bundle = load_release(conn, rid)
@@ -123,7 +123,7 @@ def release_view(request: Request, rid: int, user: str = Depends(current_user),
 def do_rollback(request: Request, rid: int, p: PostCtx = Depends(post_ctx), conn: sqlite3.Connection = Depends(get_conn)):
     try:
         new_id = rollback_to(conn, rid, p.user, str(p.form.get("comment", "")).strip())
-        flash(request, f"Откат выполнен: создан выпуск №{new_id} с содержимым выпуска №{rid}.")
+        flash(request, f"Откат выполнен: создана версия №{new_id} с содержимым версии №{rid}.")
     except PublishError as e:
         flash(request, "Откат не выполнен: " + str(e) + "".join(f" [{i.where}: {i.message}]" for i in e.issues[:5]), "error")
     return redirect("/history")
@@ -133,7 +133,7 @@ def do_rollback(request: Request, rid: int, p: PostCtx = Depends(post_ctx), conn
 def do_cancel(request: Request, rid: int, p: PostCtx = Depends(post_ctx), conn: sqlite3.Connection = Depends(get_conn)):
     try:
         cancel_scheduled(conn, rid, p.user)
-        flash(request, f"Выпуск №{rid} отменён.")
+        flash(request, f"Версия №{rid} отменена.")
     except PublishError as e:
         flash(request, str(e), "error")
     return redirect("/history")
@@ -144,9 +144,9 @@ def to_draft(request: Request, rid: int, p: PostCtx = Depends(post_ctx), conn: s
     try:
         bundle = load_release(conn, rid)
     except KeyError:
-        raise HTTPException(404, f"Выпуск №{rid} не найден") from None
+        raise HTTPException(404, f"Версия №{rid} не найдена") from None
     replace_draft(conn, bundle, p.user, f"загружен выпуск №{rid}")
-    flash(request, f"Черновик заменён содержимым выпуска №{rid}.")
+    flash(request, f"Черновик заменён содержимым версии №{rid}.")
     return redirect("/publish")
 
 
@@ -163,7 +163,7 @@ def _ground_or_404(conn: sqlite3.Connection, gid: str) -> m.Ground:
     snap = active_snapshot(conn)
     g = snap.bundle.ground(gid) if snap else None
     if g is None:
-        raise HTTPException(404, f"Основания «{gid}» нет в действующем выпуске")
+        raise HTTPException(404, f"Основания «{gid}» нет в действующей версии")
     return g
 
 
@@ -183,5 +183,5 @@ def needs_review_submit(request: Request, gid: str, p: PostCtx = Depends(post_ct
         rid = flag_needs_review(conn, gid, reason, p.user, chosen or None)
     except PublishError as e:
         return render(request, "review_form.html", status_code=422, g=g, reason=reason, chosen=chosen, errors=[str(e)])
-    flash(request, f"Основание «{gid}» помечено «требует проверки»: создан выпуск №{rid}.")
+    flash(request, f"Основание «{gid}» помечено «требует проверки»: создана версия №{rid}.")
     return redirect("/history")

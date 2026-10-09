@@ -25,7 +25,7 @@ SPOUSE = "p1"
 def _bundle(conn: sqlite3.Connection, source: str) -> tuple[m.Bundle | None, int | None, str]:
     if source == "active":
         snap = active_snapshot(conn)
-        return (snap.bundle, snap.release_id, "действующий выпуск") if snap else (None, None, "действующий выпуск")
+        return (snap.bundle, snap.release_id, "действующая версия") if snap else (None, None, "действующая версия")
     return load_draft(conn), None, "черновик"
 
 
@@ -106,7 +106,7 @@ def preview_run(request: Request, p: PostCtx = Depends(post_ctx), conn: sqlite3.
     source = "active" if form.get("source") == "active" else "draft"
     kb, release_id, _ = _bundle(conn, source)
     if kb is None:
-        return _page(request, conn, source, form, errors=["Действующего выпуска ещё нет."], status=422)
+        return _page(request, conn, source, form, errors=["Действующей версии ещё нет."], status=422)
     try:
         as_of = date.fromisoformat(str(form.get("as_of", "")).strip())
     except ValueError:

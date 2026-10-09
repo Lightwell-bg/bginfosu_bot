@@ -43,7 +43,7 @@ Details about the requests: [PROMPTS.md](PROMPTS.md) (Russian).
 ### Two services
 
 - `bot` receives Telegram updates by long polling (no webhook), stores questionnaires and calls OpenRouter.
-- `admin` is a web interface on `127.0.0.1:8080` (in Docker it listens on `0.0.0.0` inside the container through `ADMIN_HOST`; the port is published only on `127.0.0.1`).
+- `admin` is a web interface. By default it is reachable directly at `http://SERVER_IP:8091` (`[admin] host = 0.0.0.0`, `port = 8091` in `config.ini`; in Docker it uses `network_mode: host`). Protection: password login, CSRF, login attempt limit (5 per 15 minutes). If the port is not reachable from outside: `sudo ufw allow 8091/tcp`. To restrict access to an SSH tunnel only, set `host = 127.0.0.1` (admin page "Admin access" or edit `config.ini` and run `docker compose restart admin`), then: `ssh -L 8080:127.0.0.1:8091 user@SERVER_IP` and open `http://127.0.0.1:8080`.
 - Both use one SQLite database (volume `/data` in Docker). Migrations are applied automatically on start.
 
 ## Folder structure
@@ -135,15 +135,14 @@ The admin will not start without a password and a session secret (it reports wha
   python -c "import secrets; print(secrets.token_urlsafe(48))"
   ```
 
-- `ADMIN_COOKIE_SECURE` - `true` when served over HTTPS (production, behind Caddy), `false` only for local development over `http://127.0.0.1` and when accessing through an SSH tunnel. An empty value is read as `true`.
+- `ADMIN_COOKIE_SECURE` - `true` when served over HTTPS (production, behind Caddy), `false` for access over plain `http://` (directly by server IP, locally, through an SSH tunnel). An empty value is read as `true`.
 
-### Other: `CONSULT_CHAT_ID`, `DB_PATH`, `APP_MODE`, `ADMIN_HOST`
+### Other: `CONSULT_CHAT_ID`, `DB_PATH`, `APP_MODE`
 
 - `CONSULT_CHAT_ID` - numeric id of the chat or user that receives consultation requests from the bot. Optional: without it the "Order a consultation" button says that online requests are not configured (a contact from `config.ini` `[bot] consult_contact` can be shown instead).
   How to find the id: write to [@userinfobot](https://t.me/userinfobot) from the needed account (for a personal id), or add your bot to a group chat, send a message there and open `https://api.telegram.org/bot<token>/getUpdates` - `message.chat.id` holds the id (it is negative for groups). The recipient must send `/start` to the bot at least once, otherwise Telegram does not let the bot write first. Do not publish a URL containing the token.
 - `DB_PATH` - path to the SQLite file. `data/app.db` locally; in Docker it is overridden to `/data/app.db` by `docker-compose.yml` itself.
 - `APP_MODE` - `production` | `demo` | `test`. In `production` mode the bot does not start if the current release is marked as demo; the admin shows a warning in that case. Use `demo` for the demo database.
-- `ADMIN_HOST` - optional override of the address the admin listens on (otherwise `[admin] host` from `config.ini` is used). In Docker it is set in `docker-compose.yml` (`0.0.0.0`); leave it empty in `.env`.
 
 ## Running locally
 
@@ -153,7 +152,7 @@ Activate the venv (see above) and fill in `.env`.
 # Bot (needs a TEST token in .env)
 python -m bginfo.bot
 
-# Admin at http://127.0.0.1:8080 (address and port: config.ini [admin])
+# Admin at http://127.0.0.1:8091 (address and port: config.ini [admin])
 python -m bginfo.admin
 
 # Draft of the working content into the working database (DB_PATH); publishing stays with the owner

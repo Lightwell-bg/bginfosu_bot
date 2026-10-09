@@ -2,6 +2,12 @@
 
 {% macro csrf_field() %}<input type="hidden" name="csrf_token" value="{{ csrf }}">{% endmacro %}
 
+{# Строка-подсказка под заголовком страницы: «что здесь делать». #}
+{% macro page_hint(text) %}<p class="hint">{{ text }}</p>{% endmacro %}
+
+{# Цветная плашка статуса основания. #}
+{% macro status_badge(status) %}{% set b = status | badge %}<span class="badge {{ b[1] }}">{{ b[0] }}</span>{% endmacro %}
+
 {% macro errors_box(errors) %}
 {% if errors %}
 <div class="alert error" role="alert">

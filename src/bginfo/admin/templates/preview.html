@@ -36,13 +36,13 @@
 <p class="muted">Прогон движка по введённым данным без вызова AI. Пустое поле — факт не выяснен; «не знаю» — пользователь ответил «не знаю». Сообщение собирается по шаблону.</p>
 <p>Источник правил:
   <a href="/preview?source=draft" class="{{ 'on' if source == 'draft' }}">черновик</a> ·
-  <a href="/preview?source=active" class="{{ 'on' if source == 'active' }}">действующий выпуск</a>
+  <a href="/preview?source=active" class="{{ 'on' if source == 'active' }}">действующая версия</a>
   (сейчас: <strong>{{ source_label }}</strong>)
 </p>
 {{ errors_box(errors) }}
 
 {% if kb is none %}
-  <div class="alert error">Действующего выпуска ещё нет.</div>
+  <div class="alert error">Действующей версии ещё нет.</div>
 {% else %}
 <form method="post" action="/preview" class="edit">
   {{ csrf_field() }}

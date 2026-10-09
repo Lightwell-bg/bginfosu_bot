@@ -10,7 +10,7 @@ KEY = "sk-or-v1-supersecretkeyvalue"
 def _setup(monkeypatch, tmp_path, **env):
     monkeypatch.chdir(tmp_path)  # не подхватывать реальный .env
     for name in ("TELEGRAM_BOT_TOKEN", "OPENROUTER_API_KEY", "ADMIN_PASSWORD",
-                 "ADMIN_SESSION_SECRET", "CONSULT_CHAT_ID", "ADMIN_HOST"):
+                 "ADMIN_SESSION_SECRET", "CONSULT_CHAT_ID"):
         monkeypatch.delenv(name, raising=False)
     for k, v in env.items():
         monkeypatch.setenv(k, v)

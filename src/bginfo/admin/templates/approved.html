@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_hint with context %}
+{% block title %}База опубликована{% endblock %}
+{% block content %}
+<h1>База одобрена и опубликована</h1>
+{{ page_hint("Готово: бот уже отвечает по новой версии. Ниже — что именно произошло.") }}
+
+<div class="status-box ok">
+  <p class="status-line">Версия №{{ s.release_id }} опубликована. Одобрил(а): {{ by }}</p>
+</div>
+
+<section class="card">
+  <h2>Опубликовано: {{ s.published | length }}</h2>
+  {% if s.published %}<ul>{% for t in s.published %}<li>{{ t }}</li>{% endfor %}</ul>{% else %}<p class="muted">Нет.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Требует проверки (бот предложит индивидуальный разбор): {{ s.needs_review | length }}</h2>
+  {% if s.needs_review %}<ul>{% for t in s.needs_review %}<li>{{ t }}</li>{% endfor %}</ul>{% else %}<p class="muted">Нет.</p>{% endif %}
+</section>
+
+{% if s.params_unconfirmed %}
+<section class="card">
+  <h2>Цифры без подтверждения (остались неодобренными)</h2>
+  <ul>{% for t in s.params_unconfirmed %}<li>{{ t }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+<p>
+  {% if bot_link %}<a class="button" href="{{ bot_link }}" target="_blank" rel="noopener noreferrer">Открыть бота</a>{% endif %}
+  <a class="button secondary" href="/">На главную</a>
+  <a class="button secondary" href="/history">История версий</a>
+</p>
+{% endblock %}

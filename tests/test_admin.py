@@ -137,7 +137,15 @@ def edit_draft(conn, kind, item_id, **changes):
     R.save_draft_item(conn, kind, data, "other", rev, item_id)
 
 
+def edit_url(page: str) -> str:
+    """Форма правки основания живёт на /grounds/<id>/edit (на /grounds/<id> — карточка)."""
+    if page.startswith("/grounds/") and not page.endswith(("/_new", "/edit")):
+        return page + "/edit"
+    return page
+
+
 def post_form(ctx, page: str, action: str, mutate=None):
+    page = edit_url(page)
     data = harvest(ctx.client.get(page).text, action)
     if mutate:
         mutate(data)
@@ -293,7 +301,7 @@ def test_validation_errors_are_shown_in_russian_with_entered_data(ctx):
 
 
 def test_concurrent_edit_keeps_other_change(ctx):
-    data = harvest(ctx.client.get("/grounds/pensioner").text, "/grounds/pensioner")
+    data = harvest(ctx.client.get("/grounds/pensioner/edit").text, "/grounds/pensioner")
     edit_draft(ctx.conn, "ground", "pensioner", title="Чужая правка")
     setv(data, "title", "Моя правка")
     r = ctx.client.post("/grounds/pensioner", data=data)
@@ -319,7 +327,7 @@ def test_condition_builder_and_advanced_json(ctx):
     c = reqs["pension_amount"]["cond"]
     assert c["op"] == "and" and c["all"][0]["multiplier"] == 2.0 and c["all"][1]["op"] == "known_true"
     assert reqs["has_pension"]["cond"]["op"] == "or"
-    html = ctx.client.get("/grounds/pensioner").text
+    html = ctx.client.get("/grounds/pensioner/edit").text
     assert "ХОТЯ БЫ ОДНО из" in html and "расширенном режиме" in html  # сложное условие показано текстом + JSON
 
 
@@ -347,9 +355,9 @@ def test_research_fields_and_unverified_column(ctx):
     g = R.draft_item(ctx.conn, "ground", "pensioner")[0]
     assert g["research_note"] == "Заметка по основанию"
     assert g["requirements"][0]["research_status"] == "bginfo_only" and g["requirements"][1]["verified"] is False
-    page = ctx.client.get("/grounds/pensioner").text
+    page = ctx.client.get("/grounds/pensioner/edit").text
     assert "только BGINFO" in page and "не одобрение" in page
-    assert "требований без подтверждения: 1" in ctx.client.get("/grounds").text
+    assert "1 условие не подтверждено" in ctx.client.get("/grounds").text
 
 
 def test_create_and_delete_items(ctx):
@@ -400,12 +408,12 @@ def test_param_page_shows_affected_grounds(ctx):
 
 
 def test_dashboard_shows_release_and_dirty_draft(ctx):
-    assert "Опубликованного выпуска нет" in ctx.client.get("/").text
+    assert "Бот пока не отвечает пользователям: база не опубликована" in ctx.client.get("/").text
     rid = pub(ctx.conn)
     html = ctx.client.get("/").text
-    assert f"№{rid}" in html and "Есть неопубликованные" not in html
+    assert f"опубликована версия №{rid}" in html and "Бот работает" in html and "Есть изменения, которые бот ещё не видит" not in html
     edit_draft(ctx.conn, "ground", "pensioner", title="Другое")
-    assert "Есть неопубликованные изменения" in ctx.client.get("/").text
+    assert "Есть изменения, которые бот ещё не видит: 1" in ctx.client.get("/").text
 
 
 def test_publish_from_form_is_seen_by_bot_immediately(ctx):
@@ -499,7 +507,7 @@ def test_demo_release_in_production_shows_red_warning(tmp_path):
     try:
         assert do_login(c).status_code == 303
         pub(c.conn)
-        assert "демонстрационный" in c.client.get("/").text
+        assert "демонстрационная" in c.client.get("/").text
     finally:
         c.conn.close()
 
@@ -538,7 +546,7 @@ def test_preview_validates_input_and_active_source(ctx):
     assert preview(ctx, **{"f-p0-pension_amount_eur": "много"}).status_code == 422
     assert preview(ctx, as_of="вчера").status_code == 422
     r = preview(ctx, source="active")
-    assert r.status_code == 422 and "Действующего выпуска ещё нет" in r.text
+    assert r.status_code == 422 and "Действующей версии ещё нет" in r.text
     pub(ctx.conn)
     assert "Предварительно подходит" in preview(ctx, source="active").text
 
@@ -568,3 +576,182 @@ def test_xss_title_is_escaped_everywhere(ctx):
     data.update({"id": ["xss_one"], "title": [XSS], "status": ["draft"]})
     assert ctx.client.post("/grounds/_new", data=data).status_code == 303
     assert XSS not in ctx.client.get("/grounds/xss_one").text
+
+
+# --------------------------------------------------------------------------- одобрение базы и упрощённый интерфейс
+
+
+def approve_form(ctx, **over):
+    data = harvest(ctx.client.get("/").text, "/approve-all")
+    for k, v in over.items():
+        if v is None:
+            data.pop(k, None)
+        else:
+            setv(data, k, v)
+    return ctx.client.post("/approve-all", data=data)
+
+
+@pytest.fixture
+def seed_ctx(tmp_path):
+    from bginfo.seed.loader import load_seed_bundle
+
+    c = make_ctx(tmp_path, bundle=load_seed_bundle())
+    assert do_login(c).status_code == 303
+    yield c
+    c.conn.close()
+
+
+def test_dashboard_new_labels_and_tiles(seed_ctx):
+    html = seed_ctx.client.get("/").text
+    for text in ("Что сделать сейчас", "Бот пока не отвечает пользователям: база не опубликована",
+                 "Одобрить всё и опубликовать", "Основания (13)", "Цифры и суммы (", "История версий",
+                 "Опубликовать изменения", "Ещё ▾"):
+        assert text in html, text
+    assert "Показатели" not in html
+
+
+def test_approve_all_requires_name_and_confirmation(seed_ctx):
+    r = approve_form(seed_ctx, by="", confirm="on")
+    assert r.status_code == 422 and "Укажите ваше имя" in r.text
+    r = approve_form(seed_ctx, by="Иван", confirm=None)
+    assert r.status_code == 422 and "Поставьте галочку" in r.text
+    assert R.active_snapshot(seed_ctx.conn) is None
+
+
+def test_approve_all_publishes_and_bot_sees_it(seed_ctx):
+    r = approve_form(seed_ctx, by="Иван Петров", confirm="on")
+    assert r.status_code == 200
+    for text in ("База одобрена и опубликована", "Опубликовано:", "Требует проверки (бот предложит индивидуальный разбор)",
+                 "Открыть бота"):
+        assert text in r.text, text
+    assert "{param:" not in r.text
+    snap = R.active_snapshot(seed_ctx.conn)
+    assert snap is not None and len(snap.bundle.grounds) == 13
+    html = seed_ctx.client.get("/").text
+    assert f"опубликована версия №{snap.release_id}" in html and "Одобрить всё и опубликовать" not in html
+
+
+def test_approve_all_stale_draft_is_rejected(seed_ctx):
+    data = harvest(seed_ctx.client.get("/").text, "/approve-all")
+    gid = seed_ctx.conn.execute("SELECT item_id FROM kb_draft_items WHERE kind='ground' LIMIT 1").fetchone()[0]
+    edit_draft(seed_ctx.conn, "ground", gid, summary="правка")
+    setv(data, "by", "Иван")
+    setv(data, "confirm", "on")
+    r = seed_ctx.client.post("/approve-all", data=data)
+    assert r.status_code == 409 and R.active_snapshot(seed_ctx.conn) is None
+
+
+def test_new_post_routes_require_csrf(ctx):
+    for path in ("/approve-all", "/grounds/pensioner/approve", "/grounds/pensioner/mark-review", "/params/min_wage/quick"):
+        assert ctx.client.post(path, data={"by": "x"}).status_code == 403, path
+        assert ctx.client.post(path, data={"by": "x", "csrf_token": "bad"}).status_code == 403, path
+
+
+def test_new_pages_require_login(anon):
+    for path in ("/grounds/pensioner", "/grounds/pensioner/edit", "/params"):
+        assert anon.client.get(path).status_code == 303, path
+    assert anon.client.post("/approve-all", data={}).status_code == 403
+
+
+def test_ground_list_card_and_edit_pages(ctx):
+    lst = ctx.client.get("/grounds").text
+    for text in ("Статус", "Что требует внимания", "Опубликовано"):
+        assert text in lst, text
+    card = ctx.client.get("/grounds/pensioner")
+    assert card.status_code == 200
+    for text in ("Одобрить эту карточку", "Пометить: требует проверки", "Редактировать", "подтверждено"):
+        assert text in card.text, text
+    edit = ctx.client.get("/grounds/pensioner/edit").text
+    assert "Для эксперта" in edit and 'name="req-0-label"' in edit
+
+
+def test_approve_one_card_via_form(ctx):
+    edit_draft(ctx.conn, "ground", "pensioner", status="draft")
+    data = harvest(ctx.client.get("/grounds/pensioner").text, "/grounds/pensioner/approve")
+    setv(data, "by", "")
+    assert ctx.client.post("/grounds/pensioner/approve", data=data).status_code == 303
+    assert R.draft_item(ctx.conn, "ground", "pensioner")[0]["checked_by"] != "Анна"
+    setv(data, "by", "Анна")
+    assert ctx.client.post("/grounds/pensioner/approve", data=data).status_code == 303
+    g = R.draft_item(ctx.conn, "ground", "pensioner")[0]
+    assert g["checked_by"] == "Анна" and g["status"] == "published"
+    assert R.active_snapshot(ctx.conn) is None
+
+
+def test_mark_review_in_draft(ctx):
+    data = harvest(ctx.client.get("/grounds/pensioner").text, "/grounds/pensioner/mark-review")
+    setv(data, "reason", "Закон изменился")
+    assert ctx.client.post("/grounds/pensioner/mark-review", data=data).status_code == 303
+    g = R.draft_item(ctx.conn, "ground", "pensioner")[0]
+    assert g["status"] == "needs_review" and g["review_reason"] == "Закон изменился"
+
+
+def test_params_page_and_quick_edit(ctx):
+    html = ctx.client.get("/params").text
+    assert "Цифры и суммы" in html and "Эти цифры используются в" in html and "МРЗ" in html
+    data = harvest(html, "/params/min_wage/quick")
+    setv(data, "value", "700,5")
+    setv(data, "valid_from", "2027-01-01")
+    assert ctx.client.post("/params/min_wage/quick", data=data).status_code == 303
+    vals = R.draft_item(ctx.conn, "parameter", "min_wage")[0]["values"]
+    assert vals[-1]["value"] == 700.5 and vals[-1]["valid_to"] is None
+    assert vals[-2]["valid_to"] == "2026-12-31"
+
+
+# --------------------------------------------------------------------------- доступ к админке
+
+
+def test_access_page_requires_login(anon):
+    assert anon.client.get("/access").status_code == 303
+    assert anon.client.post("/access", data={"host": "0.0.0.0", "port": "8091"}).status_code == 403
+
+
+def test_access_save_requires_csrf_and_writes_ini(ctx, tmp_path, monkeypatch):
+    ini = tmp_path / "config.ini"
+    ini.write_text("# c\n[admin]\n# h\nhost = 127.0.0.1\nport = 8080\n", encoding="utf-8")
+    monkeypatch.setenv("CONFIG_INI", str(ini))
+    assert ctx.client.post("/access", data={"host": "0.0.0.0", "port": "8091"}).status_code == 403
+    r = ctx.client.get("/access")
+    assert r.status_code == 200 and "Доступ к админке" in r.text
+    data = harvest(r.text, "/access")
+    setv(data, "host", "0.0.0.0")
+    setv(data, "port", "8091")
+    assert ctx.client.post("/access", data=data).status_code == 303
+    assert ini.read_text(encoding="utf-8") == "# c\n[admin]\n# h\nhost = 0.0.0.0\nport = 8091\ntrust_proxy = false\n"
+    page = ctx.client.get("/access").text
+    assert "Применится после перезапуска" in page
+    assert "Прямой доступ: заголовки прокси не учитываются" in page
+    row = ctx.conn.execute("SELECT action, detail FROM audit_log WHERE action='admin_access_saved'").fetchone()
+    assert row and "port=8091" in row[1]
+    assert "Прямой доступ: заголовки прокси не учитываются" in ctx.client.get("/access").text
+
+
+@pytest.mark.parametrize("host,port", [("1.2.3.4", "8091"), ("0.0.0.0", "80"), ("0.0.0.0", "abc")])
+def test_access_save_rejects_invalid(ctx, tmp_path, monkeypatch, host, port):
+    ini = tmp_path / "config.ini"
+    ini.write_text("[admin]\nhost = 127.0.0.1\nport = 8080\n", encoding="utf-8")
+    monkeypatch.setenv("CONFIG_INI", str(ini))
+    data = harvest(ctx.client.get("/access").text, "/access")
+    setv(data, "host", host)
+    setv(data, "port", port)
+    assert ctx.client.post("/access", data=data).status_code == 422
+    assert "port = 8080" in ini.read_text(encoding="utf-8")
+
+
+def test_access_restart_exits_process_mocked(ctx, tmp_path, monkeypatch):
+    import threading
+
+    from bginfo.admin import routes_access
+
+    ini = tmp_path / "config.ini"
+    ini.write_text("[admin]\nhost = 0.0.0.0\nport = 8091\n", encoding="utf-8")
+    monkeypatch.setenv("CONFIG_INI", str(ini))
+    assert ctx.client.post("/access/restart", data={}).status_code == 403
+    called = threading.Event()
+    codes: list[int] = []
+    monkeypatch.setattr(routes_access.os, "_exit", lambda c: (codes.append(c), called.set()))
+    data = harvest(ctx.client.get("/access").text, "/access/restart")
+    r = ctx.client.post("/access/restart", data=data)
+    assert r.status_code == 200 and ":8091" in r.text and "10 секунд" in r.text
+    assert called.wait(5) and codes == [0]
+    assert ctx.conn.execute("SELECT 1 FROM audit_log WHERE action='admin_restart'").fetchone()

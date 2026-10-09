@@ -62,8 +62,8 @@ def _message(e: dict) -> str:
     return str(e.get("msg", "ошибка"))
 
 
-def ru_errors(exc: ValidationError) -> list[str]:
-    """Короткие русские сообщения об ошибках модели, без повторов."""
+def ru_errors(exc: ValidationError, title: str = "") -> list[str]:
+    """Короткие русские сообщения об ошибках модели, без повторов; с названием карточки, если оно известно."""
     out: list[str] = []
     for e in exc.errors():
         parts: list[str] = []
@@ -77,6 +77,8 @@ def ru_errors(exc: ValidationError) -> list[str]:
                 parts.append(FIELD_RU.get(p, str(p)))
         msg = _message(e)
         line = (" → ".join(parts) + ": " if parts and not msg.startswith("ID:") else "") + msg
+        if title:
+            line = f"«{title}»: {line}"
         if line not in out:
             out.append(line)
     return out

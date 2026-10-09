@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, page_hint, status_badge with context %}
+{% block title %}{{ item.title }}{% endblock %}
+{% block content %}
+<h1>{{ item.title }}</h1>
+{{ page_hint("Проверьте условия. Если всё верно — «Одобрить эту карточку». Бот увидит изменения только после публикации.") }}
+<p><a href="/grounds">← к списку оснований</a></p>
+
+<section class="card">
+  <p>{{ status_badge(item.status) }} <span class="tech">{{ item.id }}</span></p>
+  {% if item.status == 'needs_review' and item.review_reason %}<p class="alert warn">Причина: {{ item.review_reason }}</p>{% endif %}
+  <p class="summary-text">{{ summary or 'Описание не заполнено.' }}</p>
+
+  <h2>Условия</h2>
+  <ul class="req-list">
+  {% for r in reqs %}
+    <li>{{ r.label }} <span class="badge {{ r.badge[1] }}">{{ r.badge[0] }}</span></li>
+  {% else %}
+    <li class="muted">Условий нет.</li>
+  {% endfor %}
+  </ul>
+  {% if steps %}<h2>Шаги</h2><ol>{% for x in steps %}<li>{{ x }}</li>{% endfor %}</ol>{% endif %}
+  {% if documents %}<h2>Документы</h2><ul>{% for x in documents %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Действия</h2>
+  <div class="action-row">
+    <a class="button" href="/grounds/{{ item.id }}/edit">Редактировать</a>
+  </div>
+  <form method="post" action="/grounds/{{ item.id }}/approve" class="edit inline-form">
+    {{ csrf_field() }}
+    <input type="hidden" name="revision" value="{{ revision }}">
+    <label>Ваше имя <input name="by" required maxlength="100" placeholder="например, Иван Петров"></label>
+    <button type="submit">Одобрить эту карточку</button>
+    <p class="muted small">Подтверждённые условия получат отметку «подтверждено» с вашим именем. Не подтверждённые источником условия станут «спорными», а карточка — «требует проверки».</p>
+  </form>
+  <form method="post" action="/grounds/{{ item.id }}/mark-review" class="edit inline-form">
+    {{ csrf_field() }}
+    <input type="hidden" name="revision" value="{{ revision }}">
+    <label>Причина (её увидят пользователи) <input name="reason" required maxlength="500"></label>
+    <button type="submit" class="secondary">Пометить: требует проверки</button>
+    {% if in_active %}<p class="muted small">Пометка попадёт в бота после публикации. Чтобы пометить немедленно в действующей версии — <a href="/needs-review/{{ item.id }}">срочная пометка</a>.</p>{% endif %}
+  </form>
+</section>
+{% endblock %}

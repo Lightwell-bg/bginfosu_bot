@@ -5,7 +5,7 @@
 <h1>Требует проверки: {{ g.title }}</h1>
 <p><a href="/needs-review">← к списку</a></p>
 {{ errors_box(errors) }}
-<form method="post" action="/needs-review/{{ g.id }}" class="edit" data-confirm="Создать новый выпуск с пометкой «требует проверки» для «{{ g.id }}»? Он вступит в силу сразу.">
+<form method="post" action="/needs-review/{{ g.id }}" class="edit" data-confirm="Создать новую версию с пометкой «требует проверки» для «{{ g.id }}»? Он вступит в силу сразу.">
   {{ csrf_field() }}
   <label>Причина (увидят пользователи в результате) <textarea name="reason" rows="3" required>{{ reason }}</textarea></label>
   <fieldset>

@@ -13,6 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from bginfo.admin import (
     auth,
+    routes_access,
     routes_grounds,
     routes_kb,
     routes_main,
@@ -78,6 +79,6 @@ def create_app(settings: Settings | None = None, config: AppConfig | None = None
 
     app.mount("/static", StaticFiles(directory=str(PKG_DIR / "static")), name="static")
     for r in (auth.router, routes_main.router, routes_grounds.router, routes_kb.router, routes_release.router,
-              routes_preview.router, routes_stats.router):
+              routes_preview.router, routes_stats.router, routes_access.router):
         app.include_router(r)
     return app

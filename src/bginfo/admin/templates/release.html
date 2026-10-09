@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Выпуск №{{ rel.id }}{% endblock %}
+{% block title %}Версия №{{ rel.id }}{% endblock %}
 {% block content %}
-<h1>Выпуск №{{ rel.id }}</h1>
+<h1>Версия №{{ rel.id }}</h1>
 <p><a href="/history">← к истории</a></p>
 <table class="compact">
   <tr><th>Тип</th><td>{{ rel.kind | release_kind }}</td></tr>
@@ -12,6 +12,6 @@
   <tr><th>Комментарий</th><td>{{ rel.comment }}</td></tr>
   <tr><th>Состав</th><td>оснований: {{ bundle.grounds|length }}, показателей: {{ bundle.parameters|length }}, фактов: {{ bundle.facts|length }}, вопросов: {{ bundle.questions|length }}, источников: {{ bundle.sources|length }}{% if bundle.demo %} · ДЕМО{% endif %}</td></tr>
 </table>
-<h2>Отличия от {% if prev_id %}выпуска №{{ prev_id }}{% else %}пустой базы (предыдущего выпуска нет){% endif %}</h2>
+<h2>Отличия от {% if prev_id %}версии №{{ prev_id }}{% else %}пустой базы (предыдущей версии нет){% endif %}</h2>
 {% include "_diff.html" %}
 {% endblock %}

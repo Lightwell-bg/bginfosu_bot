@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, page_hint with context %}
+{% block title %}Цифры и суммы{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Цифры и суммы</h1>
+  <a class="button" href="/params/_new">Создать</a>
+</div>
+{{ page_hint(spec.hint) }}
+<table>
+  <thead><tr><th>Название</th><th>Значение</th><th>Действует с</th><th>Подтверждено</th><th>Изменить</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td><a href="/params/{{ r.id }}">{{ r.label }}</a><br><span class="tech">{{ r.id }} · {{ r.unit }}</span></td>
+      {% if r.derived %}
+      <td colspan="3">Считается по формуле: {{ r.formula }}</td>
+      <td><a href="/params/{{ r.id }}">Подробнее</a></td>
+      {% else %}
+      <td>{{ r.value or '—' }}</td>
+      <td>{{ r.valid_from_ru }}</td>
+      <td>{% if r.verified %}<span class="badge ok">да</span>{% else %}<span class="badge gray">нет</span>{% endif %}</td>
+      <td>
+        <form method="post" action="/params/{{ r.id }}/quick" class="one-line">
+          {{ csrf_field() }}
+          <input type="hidden" name="revision" value="{{ r.revision }}">
+          <input name="value" value="{{ r.value }}" inputmode="decimal" size="9" aria-label="Новое значение" required>
+          <input type="date" name="valid_from" value="{{ today }}" aria-label="Действует с" required>
+          <label class="check"><input type="checkbox" name="verified" {{ 'checked' if r.verified }}> подтверждено</label>
+          <button type="submit">Сохранить</button>
+          <a href="/params/{{ r.id }}">Подробнее</a>
+        </form>
+      </td>
+      {% endif %}
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">Пока пусто.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Эти цифры используются в</h2>
+<ul>
+{% for u in usage %}
+  <li><strong>{{ u.label }}</strong>: {{ u.titles | join(', ') if u.titles else 'пока нигде' }}</li>
+{% endfor %}
+</ul>
+{% endblock %}

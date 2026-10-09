@@ -1,15 +1,19 @@
-"""``python -m bginfo.admin``: запуск админки на host:port из config.ini (host можно переопределить ADMIN_HOST)."""
+"""``python -m bginfo.admin``: запуск админки на host:port из config.ini."""
 
 from __future__ import annotations
 
 import logging
 import sys
+import tempfile
+from pathlib import Path
 
 import uvicorn
 
 from bginfo.admin.app import create_app
 from bginfo.admin.common import AdminConfigError
-from bginfo.config import get_config, get_settings
+from bginfo.config import get_config
+
+PORT_FILE = "/tmp/bginfo_admin_port" if sys.platform != "win32" else str(Path(tempfile.gettempdir()) / "bginfo_admin_port")
 
 
 def main() -> int:
@@ -20,9 +24,13 @@ def main() -> int:
         print(e, file=sys.stderr)
         return 1
     cfg = get_config().admin
-    host = get_settings().ADMIN_HOST or cfg.host
+    # порт для healthcheck контейнера (читает docker-compose.yml)
+    try:
+        Path(PORT_FILE).write_text(str(cfg.port), encoding="utf-8")
+    except OSError:
+        logging.getLogger(__name__).warning("cannot write %s", PORT_FILE)
     # proxy_headers выключен: X-Forwarded-For учитывает только наш флаг [admin] trust_proxy
-    uvicorn.run(app, host=host, port=cfg.port, proxy_headers=False, server_header=False)
+    uvicorn.run(app, host=cfg.host, port=cfg.port, proxy_headers=False, server_header=False)
     return 0
 
 

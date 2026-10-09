@@ -20,13 +20,19 @@ from bginfo.db.conn import connect
 PKG_DIR = Path(__file__).parent
 
 GROUND_STATUS_RU = {
-    "draft": "черновик", "published": "опубликована", "needs_review": "требует проверки", "disabled": "отключена",
+    "draft": "черновик (бот его не видит)", "published": "опубликована", "needs_review": "требует проверки",
+    "disabled": "отключена",
+}
+# Цветные плашки статуса основания: (подпись, css-класс)
+GROUND_BADGE = {
+    "published": ("Опубликовано", "ok"), "needs_review": ("Требует проверки", "warn"),
+    "draft": ("Черновик", "gray"), "disabled": ("Отключено", "bad"),
 }
 REGIME_RU = {
     "third_country": "гражданин третьей страны", "eu": "гражданин ЕС", "family_third_country": "семья (третья страна)",
     "family_eu": "семья (ЕС)", "bg_origin": "болгарское происхождение",
 }
-KIND_RU = {"ground": "основание", "parameter": "показатель", "fact": "факт", "question": "вопрос", "source": "источник"}
+KIND_RU = {"ground": "основание", "parameter": "цифра или сумма", "fact": "факт", "question": "вопрос", "source": "источник"}
 RELEASE_KIND_RU = {"publish": "публикация", "rollback": "откат", "review_flag": "пометка «требует проверки»", "demo": "демо"}
 RESEARCH_STATUS_RU = {
     "": "— не указано —",
@@ -54,9 +60,9 @@ FIELD_RU = {
     "essential": "обязательный", "detect": "вопрос для JEV", "unit_label": "подпись единицы", "fact": "факт",
     "text_member": "текст для члена семьи", "help": "подсказка", "ask_if": "задавать, если", "ask_for": "кому",
     "priority": "приоритет", "core": "основной", "allow_unknown": "можно «не знаю»", "url": "ссылка",
-    "type": "тип", "param": "показатель", "months": "месяцев", "cmp": "оператор", "values_": "значения",
+    "type": "тип", "param": "цифра", "months": "месяцев", "cmp": "оператор", "values_": "значения",
     "statuses": "статусы", "all": "все из", "any": "любое из", "version": "версия", "demo": "демо",
-    "parameters": "показатели", "facts": "факты", "questions": "вопросы", "sources": "источники",
+    "parameters": "цифры и суммы", "facts": "факты", "questions": "вопросы", "sources": "источники",
     "grounds": "основания",
 }
 
@@ -141,9 +147,11 @@ def make_env(tz: ZoneInfo) -> jinja2.Environment:
     from bginfo.admin import conditions
 
     env.filters["local_dt"] = _local_dt(tz)
+    env.filters["local_date"] = lambda v: _local_dt(tz)(v).split(" ")[0]
     env.filters["fmt_val"] = _fmt_val
     env.filters["field_ru"] = lambda k: FIELD_RU.get(k, k)
     env.filters["ground_status"] = lambda s: GROUND_STATUS_RU.get(s, s)
+    env.filters["badge"] = lambda st: GROUND_BADGE.get(st, (st, "gray"))
     env.filters["regime_ru"] = lambda s: REGIME_RU.get(s, s)
     env.filters["kind_ru"] = lambda s: KIND_RU.get(s, s)
     env.filters["release_kind"] = lambda s: RELEASE_KIND_RU.get(s, s)

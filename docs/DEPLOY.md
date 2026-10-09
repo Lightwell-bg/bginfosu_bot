@@ -1,6 +1,6 @@
 # Развёртывание на VPS (Ubuntu + Docker Compose)
 
-Целевая схема: VPS Ubuntu, Docker Compose, два сервиса (`bot` и `admin`) с общим томом `/data`, Telegram long polling без webhook. Админка по умолчанию слушает только `127.0.0.1:8080` на сервере.
+Целевая схема: VPS Ubuntu, Docker Compose, два сервиса (`bot` и `admin`) с общим томом `/data`, Telegram long polling без webhook. Админка по умолчанию открыта напрямую: `http://IP_СЕРВЕРА:8091` (`network_mode: host`, `[admin] host/port` в `config.ini`).
 
 > Docker-сборка и запуск на машине разработки не проверялись (Docker там не установлен). Первый запуск на сервере — это первая проверка образа; см. [PROGRESS.md](PROGRESS.md).
 
@@ -49,7 +49,7 @@ nano .env
 - `ADMIN_USERNAME`, `ADMIN_PASSWORD` (пароль входа в админку, любой не пустой; админка сама хеширует его при запуске), `ADMIN_SESSION_SECRET` (от 32 символов).
 - `CONSULT_CHAT_ID` — по желанию.
 - `APP_MODE=production`. `DB_PATH` в Docker не имеет значения: `docker-compose.yml` задаёт `/data/app.db`.
-- `ADMIN_COOKIE_SECURE`: `false` при доступе через SSH-туннель (раздел 6), `true` при доступе по HTTPS через Caddy (раздел 7).
+- `ADMIN_COOKIE_SECURE`: `false` при доступе по http (напрямую по IP или через SSH-туннель, раздел 6), `true` при доступе по HTTPS через Caddy (раздел 7).
 
 Секрет сессии можно сгенерировать на сервере после первой сборки образа:
 
@@ -63,7 +63,7 @@ docker compose run --rm admin python -c "import secrets; print(secrets.token_url
 docker compose restart bot admin
 ```
 
-**Адрес прослушивания админки в контейнере.** Для сервиса `admin` в `docker-compose.yml` задано `ADMIN_HOST=0.0.0.0`: эта переменная перекрывает `[admin] host` из `config.ini`, поэтому править `host` не нужно. Наружу порт открыт только на `127.0.0.1` сервера (`127.0.0.1:${ADMIN_PORT:-8080}:8080`). Если 8080 на сервере занят, задайте в `.env` свободный порт, например `ADMIN_PORT=8081`, и используйте его в SSH-туннеле и в `reverse_proxy` Caddy.
+**Адрес и порт админки** задаются в `config.ini`, секция `[admin]` (`host = 0.0.0.0`, `port = 8091`), а не в `.env`. Сервис `admin` запускается с `network_mode: host`, поэтому слушает порт прямо на сервере. Если 8091 занят, поменяйте `port` в `config.ini` или на странице админки «Доступ к админке» (меню «Ещё»). Файл `config.ini` для `admin` смонтирован без `:ro`: админка его правит.
 
 ## 4. Сборка и запуск
 
@@ -88,15 +88,23 @@ docker compose run --rm bot python -m bginfo.seed seed-draft
 
 Пока выпуска нет, бот отвечает, что база ещё не готова. Дальше владелец проверяет карточки по [KB_GAPS.md](KB_GAPS.md) и [KB_MANUAL_UPDATE.md](KB_MANUAL_UPDATE.md) и публикует выпуск в админке. Демо-выпуск в production-базу не загружать: бот с `APP_MODE=production` на нём не запустится.
 
-## 6. Доступ к админке (по умолчанию: SSH-туннель)
+## 6. Доступ к админке (по умолчанию: напрямую по IP)
 
-На **своём компьютере**:
+Откройте в браузере `http://IP_СЕРВЕРА:8091` (IP — адрес вашего сервера; порт — `[admin] port` из `config.ini`). В `.env` на сервере `ADMIN_COOKIE_SECURE=false` (иначе cookie входа по http не сохранится). Защита: вход по паролю, CSRF, ограничение попыток (5 за 15 минут).
 
-```powershell
-ssh -L 8080:127.0.0.1:8080 user@server   # если ADMIN_PORT=8081: ssh -L 8080:127.0.0.1:8081 user@server
+Если снаружи не открывается, откройте порт в файрволе:
+
+```bash
+sudo ufw allow 8091/tcp
 ```
 
-(`user@server` — ваша обычная строка входа на сервер по ключу.) Пока сессия открыта, админка доступна на <http://127.0.0.1:8080>. В `.env` на сервере при этом `ADMIN_COOKIE_SECURE=false` (трафик идёт внутри SSH); после изменения `.env` пересоздайте сервис: `docker compose up -d admin`.
+**Сменить доступ.** Страница админки «Доступ к админке» (меню «Ещё») или правка `config.ini` (`host`, `port` в `[admin]`) и `docker compose restart admin`. Значение `host = 127.0.0.1` оставляет админку только для SSH-туннеля. Тогда на **своём компьютере**:
+
+```powershell
+ssh -L 8080:127.0.0.1:8091 user@IP_СЕРВЕРА
+```
+
+Пока сессия открыта, админка доступна на <http://127.0.0.1:8080>.
 
 ## 7. Доступ к админке снаружи (Caddy с HTTPS)
 
@@ -118,7 +126,7 @@ Caddyfile (домен вводится при выполнении команд�
 read -r -p "Домен админки: " ADMIN_DOMAIN
 sudo tee /etc/caddy/Caddyfile > /dev/null <<EOF
 ${ADMIN_DOMAIN} {
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:8091
 }
 EOF
 sudo systemctl reload caddy
@@ -130,7 +138,7 @@ sudo systemctl status caddy --no-pager | head -5
 1. В `.env`: `ADMIN_COOKIE_SECURE=true`.
 2. В `config.ini`: в секции `[admin]` поставить `trust_proxy = true` (админка тогда берёт IP клиента из `X-Forwarded-For` для ограничения попыток входа; включать **только** за собственным прокси, иначе IP подделывается).
 3. Пересобрать и перезапустить: `docker compose build && docker compose up -d`.
-4. Проверка: `curl -sI "https://${ADMIN_DOMAIN}/login" | head -1` (ожидается `HTTP/2 200`). Порт 8080 наружу не открывайте.
+4. Проверка: `curl -sI "https://${ADMIN_DOMAIN}/login" | head -1` (ожидается `HTTP/2 200`). Для HTTPS через Caddy поставьте `host = 127.0.0.1` в `config.ini` и не открывайте порт 8091 наружу.
 
 ## 8. Логи, состояние, проверка
 
@@ -138,7 +146,7 @@ sudo systemctl status caddy --no-pager | head -5
 docker compose ps                         # состояние; у admin должно быть (healthy)
 docker compose logs -f bot                # логи бота (Ctrl+C — выйти)
 docker compose logs --tail=100 admin      # логи админки
-curl -s http://127.0.0.1:8080/healthz     # {"ok":true}
+curl -s http://127.0.0.1:8091/healthz     # {"ok":true}
 ```
 
 Healthcheck есть только у `admin` (`/healthz` внутри контейнера). Здоровье бота смотрите по логам и по ответу на `/start`. В логах нет текстов пользователей и токенов. Строка `A webhook is configured for this bot` значит, что у бота настроен webhook и он остановился (см. [SWITCHOVER.md](SWITCHOVER.md)).
@@ -234,7 +242,7 @@ scp -r user@server:/opt/bginfo-bot/backups-export .\backups-from-server
    ```bash
    docker compose up -d
    docker compose ps
-   curl -s http://127.0.0.1:8080/healthz
+   curl -s http://127.0.0.1:8091/healthz
    docker compose logs --tail=30 bot
    ```
 

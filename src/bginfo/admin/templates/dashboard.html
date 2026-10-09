@@ -1,59 +1,74 @@
 {% extends "base.html" %}
+{% from "_macros.html" import csrf_field, page_hint with context %}
 {% block title %}Главная{% endblock %}
 {% block content %}
-<h1>Главная</h1>
+<h1>Что сделать сейчас</h1>
+{{ page_hint("Здесь видно, работает ли бот, и что нужно сделать, чтобы он увидел ваши правки.") }}
+
+{% if errors %}<div class="alert error" role="alert"><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
 
 {% if demo_in_prod %}
 <div class="alert error big" role="alert">
-  <strong>ВНИМАНИЕ:</strong> бот работает в режиме production, а действующий выпуск №{{ active.release_id }} — демонстрационный
+  <strong>ВНИМАНИЕ:</strong> бот работает в режиме production, а действующая версия базы №{{ active.release_id }} — демонстрационная
   (тестовые карточки). Опубликуйте настоящую базу.
 </div>
 {% endif %}
 
-<div class="cards">
-  <section class="card">
-    <h2>Действующий выпуск</h2>
-    {% if active %}
-      <p class="big">№{{ active.release_id }}</p>
-      <p>вступил в силу: {{ active.effective_from | local_dt }} ({{ tz_name }})</p>
-      <p><a href="/releases/{{ active.release_id }}">Состав и отличия от предыдущего</a></p>
-    {% else %}
-      <p class="alert error">Опубликованного выпуска нет: бот отвечает, что база ещё не готова.</p>
-    {% endif %}
-  </section>
-
-  <section class="card">
-    <h2>Черновик</h2>
-    {% if dirty %}
-      <p class="alert warn">Есть неопубликованные изменения:
-        добавлено {{ diff_counts.get('added', 0) }}, изменено {{ diff_counts.get('changed', 0) }},
-        удалено {{ diff_counts.get('removed', 0) }}.</p>
-      <p><a class="button" href="/publish">Проверить и опубликовать</a></p>
-    {% else %}
-      <p>Черновик совпадает с действующим выпуском.</p>
-    {% endif %}
-  </section>
-
-  <section class="card">
-    <h2>Запланированные выпуски</h2>
-    {% for r in scheduled %}
-      <p>№{{ r.id }} — {{ r.effective_from | local_dt }} ({{ r.created_by }}){% if r.comment %}: {{ r.comment }}{% endif %}</p>
-    {% else %}
-      <p class="muted">Нет.</p>
-    {% endfor %}
-    <p><a href="/history">История выпусков</a></p>
-  </section>
+{% if active %}
+<div class="status-box ok">
+  <p class="status-line">Бот работает: опубликована версия №{{ active.release_id }} от {{ active.effective_from | local_date }}</p>
+  <p class="muted small"><a href="/releases/{{ active.release_id }}">Что входит в эту версию</a></p>
 </div>
+{% else %}
+<div class="status-box bad">
+  <p class="status-line">Бот пока не отвечает пользователям: база не опубликована</p>
+  <p class="muted small">Пока версия не опубликована, бот пишет «сервис готовится».</p>
+</div>
+{% endif %}
 
-<section class="card">
-  <h2>Основания по статусам</h2>
-  <table>
-    <thead><tr><th>Статус</th><th>В черновике</th><th>В действующем выпуске</th></tr></thead>
-    <tbody>
-    {% for k, label in GROUND_STATUS_RU.items() %}
-      <tr><td>{{ label }}</td><td>{{ draft_counts[k] }}</td><td>{{ active_counts[k] if active_counts else '—' }}</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
+{% if dirty %}
+<div class="status-box warn">
+  <p class="status-line">Есть изменения, которые бот ещё не видит: {{ changes }}</p>
+  <p><a class="button" href="/publish">Посмотреть и опубликовать</a></p>
+</div>
+{% endif %}
+
+{% if can_approve_all %}
+<section class="card approve-card">
+  <h2>Одобрить всё и опубликовать</h2>
+  <p>Все карточки и цифры из черновика ({{ grounds_total }} оснований) будут отмечены как проверенные вами и сразу опубликованы.
+     Условия, которые не подтверждены официальным источником, бот не будет считать надёжными: по ним он предложит индивидуальный разбор.</p>
+  <form method="post" action="/approve-all" class="edit">
+    {{ csrf_field() }}
+    <input type="hidden" name="draft_revision" value="{{ draft_rev }}">
+    <label>Ваше имя <input name="by" value="{{ values.by or '' }}" maxlength="100" required placeholder="например, Иван Петров"></label>
+    <label class="check"><input type="checkbox" name="confirm" {{ 'checked' if values.confirm }}> Я проверил(а) карточки и беру ответственность за публикацию</label>
+    <p><button type="submit" class="primary-big">Одобрить всё и опубликовать</button></p>
+  </form>
 </section>
+{% endif %}
+
+{% if scheduled %}
+<section class="card">
+  <h2>Запланированные версии</h2>
+  {% for r in scheduled %}
+    <p>№{{ r.id }} — вступит в силу {{ r.effective_from | local_dt }} ({{ r.created_by }}){% if r.comment %}: {{ r.comment }}{% endif %}</p>
+  {% endfor %}
+</section>
+{% endif %}
+
+<div class="tiles">
+  <a class="tile" href="/grounds">
+    <span class="tile-title">Основания ({{ grounds_total }})</span>
+    <span class="muted">Карточки: на каком основании человек может жить в Болгарии, что для этого нужно.</span>
+  </a>
+  <a class="tile" href="/params">
+    <span class="tile-title">Цифры и суммы ({{ params_total }})</span>
+    <span class="muted">Минимальная зарплата, пороги дохода и другие числа, которые бот подставляет в тексты.</span>
+  </a>
+  <a class="tile" href="/history">
+    <span class="tile-title">История версий</span>
+    <span class="muted">Что и когда публиковалось. Можно вернуться к прежней версии.</span>
+  </a>
+</div>
 {% endblock %}

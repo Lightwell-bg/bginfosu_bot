@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Доступ к админке{% endblock %}
+{% block content %}
+<h1>Доступ к админке</h1>
+{% if errors %}<div class="alert error" role="alert"><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+<section class="card">
+  <p>Сейчас в config.ini: адрес <b>{{ saved.host }}</b>, порт <b>{{ saved.port }}</b>.</p>
+  {% if pending %}
+  <p class="alert error">Работающая админка слушает {{ running.host }}:{{ running.port }}. Новые значения применятся после перезапуска.</p>
+  {% endif %}
+  <form method="post" action="/access">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label class="check"><input type="radio" name="host" value="0.0.0.0" {{ 'checked' if values.host == '0.0.0.0' }}> По IP сервера — открыта из интернета</label>
+    <label class="check"><input type="radio" name="host" value="127.0.0.1" {{ 'checked' if values.host == '127.0.0.1' }}> Только через SSH-туннель</label>
+    <p class="muted small">Если выбрать туннель: после перезапуска войти можно только через
+      <code>ssh -L 8080:127.0.0.1:ПОРТ пользователь@IP_СЕРВЕРА</code>, затем открыть http://127.0.0.1:8080.</p>
+    <p class="muted small">Прямой доступ: заголовки прокси не учитываются.</p>
+    <p><label>Порт (1024–65535)<br><input type="number" name="port" min="1024" max="65535" value="{{ values.port }}" required></label></p>
+    <button type="submit">Сохранить</button>
+  </form>
+</section>
+<section class="card">
+  <h2>Перезапуск</h2>
+  <p class="muted">Админка завершится, Docker поднимет её заново с новыми настройками. Страница на пару секунд станет недоступна.</p>
+  <form method="post" action="/access/restart">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <button type="submit">Перезапустить админку</button>
+  </form>
+</section>
+{% endblock %}

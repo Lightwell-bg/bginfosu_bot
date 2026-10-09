@@ -65,7 +65,6 @@ def run_checks() -> tuple[list[str], bool]:
 
     lines.append(_line("DB_PATH", s.DB_PATH))
     lines.append(_line("APP_MODE", s.APP_MODE))
-    lines.append(_line("ADMIN_HOST", s.ADMIN_HOST or "(пусто)"))
     return lines, ok
 
 

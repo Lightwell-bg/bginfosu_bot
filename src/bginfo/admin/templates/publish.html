@@ -1,8 +1,9 @@
 {% extends "base.html" %}
-{% from "_macros.html" import csrf_field with context %}
-{% block title %}Проверка и публикация{% endblock %}
+{% from "_macros.html" import csrf_field, page_hint with context %}
+{% block title %}Опубликовать изменения{% endblock %}
 {% block content %}
-<h1>Проверка и публикация</h1>
+<h1>Опубликовать изменения</h1>
+{{ page_hint("Проверьте список ниже. Если ошибок нет — нажмите «Опубликовать»: бот сразу начнёт отвечать по новой версии.") }}
 
 {% if errors %}<div class="alert error" role="alert"><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
 {% if publish_issues %}
@@ -13,7 +14,7 @@
 {% endif %}
 
 <section class="card">
-  <h2>1. Проверка черновика</h2>
+  <h2>1. Проверка черновика (бот его не видит)</h2>
   {% if issues %}
   <table>
     <thead><tr><th>Уровень</th><th>Где</th><th>Что не так</th></tr></thead>
@@ -28,7 +29,7 @@
 </section>
 
 <section class="card">
-  <h2>2. Что изменится по сравнению с {% if active %}действующим выпуском №{{ active.release_id }}{% else %}пустой базой{% endif %}</h2>
+  <h2>2. Что изменится по сравнению с {% if active %}действующей версией №{{ active.release_id }}{% else %}пустой базой{% endif %}</h2>
   {% include "_diff.html" %}
 </section>
 
@@ -40,7 +41,7 @@
     <label>Комментарий <input name="comment" value="{{ values.comment or '' }}" maxlength="500" placeholder="что изменилось и почему"></label>
     <label>Вступит в силу ({{ tz_name }}; пусто — сразу)
       <input type="datetime-local" name="effective_from" value="{{ values.effective_from or '' }}"></label>
-    <p class="muted small">Выпуск с будущей датой начнёт действовать сам, без перезапуска бота. Задним числом публиковать нельзя.</p>
+    <p class="muted small">Версия с будущей датой начнёт действовать сам, без перезапуска бота. Задним числом публиковать нельзя.</p>
     <button type="submit" {{ 'disabled' if has_errors }}>Опубликовать</button>
   </form>
 </section>
