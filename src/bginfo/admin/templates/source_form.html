@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors_box, select with context %}
+{% block title %}{{ 'Новый источник' if is_new else 'Источник ' ~ item.id }}{% endblock %}
+{% block content %}
+<h1>{{ 'Новый источник' if is_new else 'Источник: ' ~ item.title }}</h1>
+<p><a href="/sources">← к источникам</a></p>
+{{ errors_box(errors) }}
+{% if conflict %}<div class="alert warn"><a href="/sources/{{ item.id }}">Открыть актуальную версию</a></div>{% endif %}
+<form method="post" action="/sources/{{ '_new' if is_new else item.id }}" class="edit">
+  {{ csrf_field() }}
+  <input type="hidden" name="revision" value="{{ revision }}">
+  <fieldset>
+    <legend>Источник</legend>
+    <div class="grid">
+      <label>ID {% if is_new %}<input name="id" value="{{ item.id }}" required placeholder="например, bg_pensioner">
+        {% else %}<input value="{{ item.id }}" readonly>{% endif %}</label>
+      <label>Тип {{ select('kind', CHOICES.source_kind, item.kind) }}</label>
+      <label class="wide">Название <input name="title" value="{{ item.title }}" required></label>
+      <label class="wide">Ссылка (https://…) <input name="url" value="{{ item.url }}" required></label>
+    </div>
+    <label>Заметка <textarea name="note" rows="2">{{ item.note }}</textarea></label>
+  </fieldset>
+  <div class="actions"><button type="submit">Сохранить в черновик</button></div>
+</form>
+{% if not is_new %}
+<form method="post" action="/sources/{{ item.id }}/delete" data-confirm="Удалить источник «{{ item.id }}» из черновика?" class="danger-zone">
+  {{ csrf_field() }}<input type="hidden" name="revision" value="{{ revision }}">
+  <button type="submit" class="danger">Удалить из черновика</button>
+</form>
+{% endif %}
+{% endblock %}

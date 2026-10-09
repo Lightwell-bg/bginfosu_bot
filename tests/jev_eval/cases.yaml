@@ -1,0 +1,73 @@
+# Размеченные обезличенные примеры для проверки разбора свободного текста (JEV).
+# expect: направления (fact:option), которые ОБЯЗАТЕЛЬНО должны быть распознаны (метрика — пропуски).
+# forbid: направления, которые НЕ должны распознаваться как «да» (ложные срабатывания, вторичная метрика).
+# Роль: self — автор, spouse — супруг(а), case — анкета.
+- id: c01_pensioner_wife_works
+  text: "Я пенсионер, жена ещё работает, хотим переехать вместе, квартира уже есть"
+  expect: [self:income_sources:pension, case:family_moving:spouse, case:has_housing:true]
+  forbid: [self:income_sources:job_offer_bg]
+- id: c02_it_remote
+  text: "Работаю программистом удалённо на американскую компанию по трудовому договору, хочу пожить в Болгарии"
+  expect: [self:income_sources:remote_employee]
+  forbid: [self:income_sources:pension]
+- id: c03_freelancer_typos
+  text: "я фрилансер дизайнер, клиенты в европе и сша, работаю на себя уже 3 года, гражданство рф"
+  expect: [self:income_sources:freelance_foreign, self:citizenship_group:third]
+- id: c04_negation_pension
+  text: "Пенсии у меня нет, мне 40 лет, есть своя фирма в Казахстане"
+  expect: [self:income_sources:own_company_abroad]
+  forbid: [self:income_sources:pension]
+- id: c05_job_offer
+  text: "Болгарская компания предложила мне работу инженером, высшее образование есть"
+  expect: [self:income_sources:job_offer_bg]
+- id: c06_student
+  text: "Дочь поступила в Софийский университет на очное, ей 18, мы из Украины"
+  expect: []
+  # учится дочь, не автор; ties считаются от лица автора — направление «учёба» должно быть распознано
+  any_of: [[self:ties:study]]
+- id: c07_bg_spouse
+  text: "Муж болгарин, я гражданка Молдовы, живём пока в Кишинёве"
+  expect: [self:ties:spouse_bg]
+- id: c08_bg_origin
+  text: "У меня болгарские корни, дедушка из Бессарабии, есть ли шанс получить постоянное проживание?"
+  expect: [self:ties:bg_origin]
+- id: c09_investor
+  text: "Хочу купить недвижимость в Болгарии примерно за 350 тысяч евро и жить там"
+  expect: [self:ties:investment]
+- id: c10_business
+  text: "Планирую открыть в Варне ресторан и нанять местных сотрудников"
+  expect: [self:income_sources:business_bg]
+- id: c11_eu_citizen
+  text: "У меня паспорт Румынии и России, хочу переехать в Пловдив"
+  expect: [self:citizenship_group:eu, self:citizenship_group:third]
+- id: c12_already_in_bg
+  text: "Я уже год живу в Бургасе по ВНЖ как пенсионер, хочу перевезти сына"
+  expect: [case:who_moves:already_in_bg, self:income_sources:pension, case:family_moving:children]
+- id: c13_mixed_family
+  text: "Мы с мужем и двумя детьми, муж работает удалённо в IT на немецкую фирму, я сижу с детьми"
+  expect: [case:family_moving:spouse, case:family_moving:children]
+  any_of: [[spouse:income_sources:remote_employee, self:income_sources:remote_employee]]
+- id: c14_passive
+  text: "Живу на доходы от сдачи квартиры в Москве и проценты по вкладам"
+  expect: [self:income_sources:passive]
+- id: c15_for_other
+  text: "Спрашиваю для мамы, ей 67, она получает пенсию в Беларуси"
+  expect: [case:who_moves:other_person]
+  any_of: [[self:income_sources:pension, other_member:income_sources:pension]]
+- id: c16_short_vague
+  text: "хочу в болгарию"
+  expect: []
+  forbid: [self:income_sources:pension, self:income_sources:remote_employee, self:ties:investment]
+- id: c17_rep_office
+  text: "Я директор и совладелец торговой компании в Узбекистане, думаем открыть представительство в Болгарии"
+  expect: [self:income_sources:own_company_abroad]
+- id: c18_contradiction
+  text: "Я пенсионер, хотя нет, пенсию ещё не оформил, работаю"
+  expect: []
+  forbid: []
+- id: c19_parents_and_kids
+  text: "Переезжаем всей семьёй: я, жена, трое детей и моя мама. Я владею бизнесом в Турции"
+  expect: [case:family_moving:spouse, case:family_moving:children, case:family_moving:parents, self:income_sources:own_company_abroad]
+- id: c20_eu_relative
+  text: "Моя жена гражданка Греции, мы хотим жить в Болгарии, я гражданин Грузии"
+  expect: [self:ties:eu_relative, self:citizenship_group:third]

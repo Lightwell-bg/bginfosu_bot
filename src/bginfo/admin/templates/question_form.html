@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors_box, cond_builder, leaf_template with context %}
+{% block title %}{{ 'Новый вопрос' if is_new else 'Вопрос ' ~ item.id }}{% endblock %}
+
+{% block content %}
+<h1>{{ 'Новый вопрос' if is_new else 'Вопрос: ' ~ item.id }}</h1>
+<p><a href="/questions">← к вопросам</a></p>
+{{ errors_box(errors) }}
+{% if conflict %}<div class="alert warn"><a href="/questions/{{ item.id }}">Открыть актуальную версию</a></div>{% endif %}
+
+<form method="post" action="/questions/{{ '_new' if is_new else item.id }}" class="edit">
+  {{ csrf_field() }}
+  <input type="hidden" name="revision" value="{{ revision }}">
+  <fieldset>
+    <legend>Вопрос</legend>
+    <div class="grid">
+      <label>ID {% if is_new %}<input name="id" value="{{ item.id }}" required placeholder="например, q_housing">
+        {% else %}<input value="{{ item.id }}" readonly>{% endif %}</label>
+      <label>Факт (что выясняет вопрос)
+        <select name="fact">
+          <option value="">—</option>
+          {% for f in fact_list %}<option value="{{ f.key }}" {{ 'selected' if f.key == item.fact }}>{{ f.label }} [{{ f.key }}]</option>{% endfor %}
+          {% if item.fact and item.fact not in facts_by_key %}<option value="{{ item.fact }}" selected>{{ item.fact }} (нет в каталоге)</option>{% endif %}
+        </select>
+      </label>
+      <label>Приоритет (меньше — раньше) <input name="priority" value="{{ item.priority }}" size="4"></label>
+    </div>
+    <label>Текст вопроса <textarea name="text" rows="2">{{ item.text }}</textarea></label>
+    <label>Текст для члена семьи (<code>{who}</code> заменяется на «супруга(и)», «ребёнка 1» и т. п.) <textarea name="text_member" rows="2">{{ item.text_member }}</textarea></label>
+    <label>Подсказка <textarea name="help" rows="2">{{ item.help }}</textarea></label>
+    <div class="checks">
+      <span>Кому задавать:</span>
+      {% for k, v in CHOICES.ask_for.items() %}<label class="check"><input type="checkbox" name="ask_for" value="{{ k }}" {{ 'checked' if k in item.ask_for }}> {{ v }}</label>{% endfor %}
+      <label class="check"><input type="checkbox" name="core" {{ 'checked' if item.core }}> основной вопрос</label>
+      <label class="check"><input type="checkbox" name="allow_unknown" {{ 'checked' if item.allow_unknown }}> можно ответить «не знаю»</label>
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Задавать, только если (ask_if)</legend>
+    <p class="muted small">Пусто — вопрос задаётся всегда.</p>
+    {{ cond_builder('ask_if', item.ask_if) }}
+  </fieldset>
+  {{ leaf_template() }}
+  <div class="actions"><button type="submit">Сохранить в черновик</button></div>
+</form>
+
+{% if not is_new %}
+<form method="post" action="/questions/{{ item.id }}/delete" data-confirm="Удалить вопрос «{{ item.id }}» из черновика?" class="danger-zone">
+  {{ csrf_field() }}<input type="hidden" name="revision" value="{{ revision }}">
+  <button type="submit" class="danger">Удалить из черновика</button>
+</form>
+{% endif %}
+{% endblock %}

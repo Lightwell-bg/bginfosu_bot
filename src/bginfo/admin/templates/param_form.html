@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors_box, select, research_select, source_select with context %}
+{% block title %}{{ 'Новый показатель' if is_new else 'Показатель ' ~ item.id }}{% endblock %}
+
+{% macro val_row(i, v) %}
+{% set p = 'val-' ~ i %}
+<div class="row-item">
+  <input type="hidden" name="val_idx" value="{{ i }}">
+  <div class="grid">
+    <label>Значение <input name="{{ p }}-value" value="{{ v.value }}" inputmode="decimal"></label>
+    <label>Действует с <input type="date" name="{{ p }}-valid_from" value="{{ v.valid_from or '' }}"></label>
+    <label>Действует по (пусто — бессрочно) <input type="date" name="{{ p }}-valid_to" value="{{ v.valid_to or '' }}"></label>
+    <label class="check"><input type="checkbox" name="{{ p }}-verified" {{ 'checked' if v.verified }}> проверено</label>
+    <label>Итог первоначального исследования {{ research_select(p ~ '-research_status', v.research_status) }}</label>
+  </div>
+  <label>Источники {{ source_select(p ~ '-source_ids', v.source_ids) }}</label>
+  <label>Заметка <input name="{{ p }}-note" value="{{ v.note }}"></label>
+  <button type="button" class="link" data-remove>удалить значение</button>
+</div>
+{% endmacro %}
+
+{% block content %}
+<h1>{{ 'Новый показатель' if is_new else 'Показатель: ' ~ item.label }}</h1>
+<p><a href="/params">← к списку показателей</a></p>
+{{ errors_box(errors) }}
+{% if conflict %}<div class="alert warn"><a href="/params/{{ item.id }}">Открыть актуальную версию</a></div>{% endif %}
+
+{% if not is_new %}
+<div class="alert warn">
+  <strong>Затронет основания:</strong>
+  {% for gid, title in affected %}<a href="/grounds/{{ gid }}">{{ title }} ({{ gid }})</a>{{ ', ' if not loop.last }}{% else %}пока ни одно{% endfor %}
+</div>
+{% endif %}
+
+<form method="post" action="/params/{{ '_new' if is_new else item.id }}" class="edit">
+  {{ csrf_field() }}
+  <input type="hidden" name="revision" value="{{ revision }}">
+  <fieldset>
+    <legend>Показатель</legend>
+    <div class="grid">
+      <label>ID {% if is_new %}<input name="id" value="{{ item.id }}" required placeholder="например, min_wage">
+        {% else %}<input value="{{ item.id }}" readonly>{% endif %}</label>
+      <label class="wide">Название <input name="label" value="{{ item.label }}" required></label>
+      <label>Единица {{ select('unit', CHOICES.unit, item.unit) }}</label>
+    </div>
+    <label>Заметка <input name="note" value="{{ item.note }}"></label>
+    <p class="muted small">В текстах оснований показатель вставляется как <code>{param:{{ item.id or 'ID' }}}</code>.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Откуда берётся значение</legend>
+    {% set derived = item.derived is not none and item.derived %}
+    <label class="check"><input type="radio" name="kind" value="values" {{ 'checked' if not derived }}> задано значениями по периодам</label>
+    <label class="check"><input type="radio" name="kind" value="derived" {{ 'checked' if derived }}> производный: множитель × другой показатель</label>
+
+    <div class="subhead">Значения по периодам (периоды не должны пересекаться)</div>
+    <div class="rows" id="rows-val">
+      {% for v in item['values'] %}{{ val_row(loop.index0, v) }}{% endfor %}
+    </div>
+    <button type="button" class="secondary" data-add data-template="tpl-val" data-target="rows-val">+ значение</button>
+    <template id="tpl-val">{{ val_row('__I__', {'value': '', 'valid_from': '', 'valid_to': '', 'source_ids': [], 'verified': False, 'note': '', 'research_status': ''}) }}</template>
+
+    <div class="subhead">Производный показатель</div>
+    <div class="grid">
+      <label>От показателя
+        <select name="derived_of">
+          <option value="">—</option>
+          {% for pr in params if pr.id != item.id %}<option value="{{ pr.id }}" {{ 'selected' if derived and derived.of == pr.id }}>{{ pr.label }} [{{ pr.id }}]</option>{% endfor %}
+        </select>
+      </label>
+      <label>Множитель <input name="derived_mult" value="{{ derived.multiplier if derived else '' }}"></label>
+    </div>
+  </fieldset>
+  <div class="actions"><button type="submit">Сохранить в черновик</button></div>
+</form>
+
+{% if not is_new %}
+<form method="post" action="/params/{{ item.id }}/delete" data-confirm="Удалить показатель «{{ item.id }}» из черновика?" class="danger-zone">
+  {{ csrf_field() }}<input type="hidden" name="revision" value="{{ revision }}">
+  <button type="submit" class="danger">Удалить из черновика</button>
+</form>
+{% endif %}
+{% endblock %}

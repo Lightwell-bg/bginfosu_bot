@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>{{ title }}</h1>
+  <a class="button" href="{{ spec.base }}/_new">Создать</a>
+</div>
+<p class="muted">Показан черновик. В боте изменения появятся после публикации.</p>
+<table>
+  <thead><tr><th>ID</th>{% for h in headers %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr{% if r.warn %} class="warn"{% endif %}>
+      <td><a href="{{ spec.base }}/{{ r.id }}"><code>{{ r.id }}</code></a></td>
+      {% for c in r.cells %}<td>{{ c }}</td>{% endfor %}
+    </tr>
+  {% else %}
+    <tr><td colspan="{{ headers|length + 1 }}" class="muted">Пока пусто.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

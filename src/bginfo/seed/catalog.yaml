@@ -1,0 +1,608 @@
+# Каталог базы знаний: источники, общие показатели, факты и вопросы.
+# Первоначальное наполнение 2026-10-09 по docs/research/KB_RESEARCH.md.
+# Всё загружается в ЧЕРНОВИК. Отметки verified=false: одобрение ставит владелец в админке.
+
+sources:
+  # --- официальные публикации (Държавен вестник)
+  - {id: dv_2025_052, kind: official_publication, title: "ДВ бр. 52 от 27.06.2025 — ЗИД ЗЧРБ", url: "https://dv.parliament.bg/DVWeb/showMaterialDV.jsp?idMat=235575"}
+  - {id: dv_2025_098_mrz, kind: official_publication, title: "ДВ бр. 98 от 18.11.2025 — ПМС № 243 (МРЗ с 01.01.2026)", url: "https://dv.parliament.bg/DVWeb/showMaterialDV.jsp?idMat=238961", note: "Проверено напрямую 2026-10-09: «1213 лв. (620,20 евро)» с 01.01.2026."}
+  # --- консолидированные тексты (не официальное опубликование)
+  - {id: zchrb, kind: consolidated_text, title: "Закон за чужденците в Република България (консолидированный текст, Ciela)", url: "https://www.ciela.net/svobodna-zona-normativi/view/2134455296"}
+  - {id: ppzchrb, kind: consolidated_text, title: "Правилник за прилагане на ЗЧРБ (консолидированный текст, Ciela)", url: "https://www.ciela.net/svobodna-zona-normativi/view/2135738597"}
+  - {id: ztmtm, kind: consolidated_text, title: "Закон за трудовата миграция и трудовата мобилност (консолидированный текст, Ciela)", url: "https://www.ciela.net/svobodna-zona-normativi/view/2136803084/zakon-za-trudovata-migratsiya-i-trudovata-mobilnost"}
+  - {id: zeu, kind: consolidated_text, title: "Закон о гражданах ЕС и членах их семей (консолидированный текст, Ciela)", url: "https://www.ciela.net/svobodna-zona-normativi/view/2135535758"}
+  - {id: zni, kind: consolidated_text, title: "Закон за насърчаване на инвестициите (консолидированный текст, Ciela)", url: "https://www.ciela.net/svobodna-zona-normativi/view/2134164480"}
+  # --- BGINFO
+  - {id: bg_overview, kind: bginfo, title: "Основания для ВНЖ в Болгарии", url: "https://bginfo.eu/osnovaniya-dlya-polucheniya-vida-na-zhitelstvo-vnzh-v-bolgarii/"}
+  - {id: bg_pensioner, kind: bginfo, title: "ВНЖ для пенсионеров", url: "https://bginfo.eu/vid-na-zhitelstvo/vid-na-zhitelstvo-v-bolgarii-dlya-pensionerov/"}
+  - {id: bg_trade_rep, kind: bginfo, title: "Торговое представительство", url: "https://bginfo.eu/otkrytie-predstavitelstva/"}
+  - {id: bg_family, kind: bginfo, title: "ВНЖ для членов семьи", url: "https://bginfo.eu/vid-na-zhitelstvo/vid-na-zhitelstvo-dlya-chlenov-semi/"}
+  - {id: bg_single_permit, kind: bginfo, title: "Единое разрешение на проживание и работу", url: "https://bginfo.eu/vid-na-zhitelstvo/edinoe-razreshenie-na-prozhivanie-i-rabotu/"}
+  - {id: bg_blue_card, kind: bginfo, title: "Синяя карта ЕС", url: "https://bginfo.eu/vid-na-zhitelstvo/eu-blue-card/"}
+  - {id: bg_digital_nomad, kind: bginfo, title: "Виза для цифровых кочевников", url: "https://bginfo.eu/vid-na-zhitelstvo/viza-dlya-cifrovyx-kochevnikov/"}
+  - {id: bg_student, kind: bginfo, title: "ВНЖ по учёбе", url: "https://bginfo.eu/vid-na-zhitelstvo/vnzh-po-uchebe/"}
+  - {id: bg_company, kind: bginfo, title: "Открытие фирмы в Болгарии", url: "https://bginfo.eu/biznes-v-bolgarii-i-es/otkrytie-firmy-v-bolgarii/"}
+  - {id: bg_rp_hub, kind: bginfo, title: "Вид на жительство в Болгарии", url: "https://bginfo.eu/vid-na-zhitelstvo/"}
+  - {id: bg_tp_dn_diff, kind: bginfo, title: "Отличия ВНЖ через представительство и Digital nomad", url: "https://bginfo.eu/otlichiya-mezhdu-vnzh-tp-dn/"}
+
+parameters:
+  - id: min_wage
+    label: "Минимальная месячная зарплата в Болгарии (МРЗ)"
+    unit: EUR/month
+    values:
+      - {value: 620.20, valid_from: "2026-01-01", source_ids: [dv_2025_098_mrz], verified: false, research_status: official_publication,
+         note: "ПМС № 243 от 13.11.2025, ДВ бр. 98/2025: 1213 лв. (620,20 евро). Проверено по ДВ 2026-10-09; одобрение — за владельцем."}
+  - id: dn_income_year
+    label: "Digital nomad: минимальный годовой доход (50 МРЗ)"
+    unit: EUR/year
+    derived: {of: min_wage, multiplier: 50}
+    note: "чл. 24с ал. 1 ЗЧРБ: не меньше 50 МРЗ среднегодового дохода за предыдущий календарный год. Закон не уточняет, МРЗ какого года брать: при МРЗ-2026 — 31 010 €, при МРЗ-2025 — около 27 533 €. Требует решения владельца."
+  - id: min_pension_bg
+    label: "Минимальная пенсия в Болгарии"
+    unit: EUR/month
+    values:
+      - {value: 347.51, valid_from: "2026-07-01", source_ids: [bg_pensioner], verified: false, research_status: unconfirmed,
+         note: "Официальный акт не найден; сумма по СМИ (НОИ) и BGINFO."}
+  - id: invest_real_estate
+    label: "Инвестиция в недвижимость для ВНЖ (на каждого иностранца)"
+    unit: EUR
+    values:
+      - {value: 306775.13, valid_from: "2026-01-01", source_ids: [zchrb, ppzchrb], verified: false, research_status: unconfirmed,
+         note: "Закон: 600 000 лв. (= 306 775,13 € по курсу 1,95583). В ППЗЧРБ чл. 29а (ДВ бр. 7/2026) указано «306 755,13 евро» — расхождение, нужна сверка с ДВ бр. 7/2026."}
+  - id: invest_region
+    label: "Инвестиция в капитал компании в необлагодетелстван регион"
+    unit: EUR
+    values:
+      - {value: 127822.97, valid_from: "2026-01-01", source_ids: [zchrb, ppzchrb], verified: false, research_status: consolidated,
+         note: "чл. 24 ал. 1 т. 20 ЗЧРБ: 250 000 лв.; евро-сумма из бланка ППЗЧРБ (ДВ бр. 7/2026, читано в консолидации)."}
+  - id: trade_rep_turnover
+    label: "Торговое представительство: минимальный годовой оборот компании"
+    unit: EUR/year
+    values:
+      - {value: 51129.19, valid_from: "2026-01-01", source_ids: [zchrb, dv_2025_052], verified: false, research_status: consolidated,
+         note: "чл. 24 ал. 1 т. 6 ЗЧРБ: 100 000 лв. за каждый из 2 лет; евро — расчёт по курсу 1,95583."}
+  - id: business_jobs_count
+    label: "Бизнес: минимум рабочих мест для граждан Болгарии"
+    unit: count
+    values:
+      - {value: 10, valid_from: "2007-01-01", source_ids: [zchrb], verified: false, research_status: consolidated}
+  - id: region_jobs_count
+    label: "Инвестиция в регион: минимум рабочих мест для граждан Болгарии"
+    unit: count
+    values:
+      - {value: 5, valid_from: "2015-01-01", source_ids: [zchrb], verified: false, research_status: consolidated}
+
+facts:
+  # ---------------- анкета (case)
+  - key: who_moves
+    scope: case
+    type: enum
+    label: "Для кого подбор"
+    essential: true
+    options:
+      - {value: self, label: "Для себя"}
+      - {value: self_family, label: "Для себя и семьи", detect: "Указано ли, что переезжать планируют вместе с семьёй (супругом, детьми или родителями)?"}
+      - {value: other_person, label: "Для другого человека", detect: "Указано ли, что человек спрашивает не для себя, а для другого человека (друга, родственника, клиента)?"}
+      - {value: already_in_bg, label: "Я уже живу в Болгарии", detect: "Указано ли, что человек уже живёт в Болгарии?"}
+  - key: family_moving
+    scope: case
+    type: multi
+    label: "Кто переезжает вместе"
+    depends_on: [who_moves]
+    options:
+      - {value: spouse, label: "Супруг(а)", detect: "Упоминается ли муж, жена или супруг(а) автора как часть семьи, которая переезжает или живёт вместе с ним (например, «мы с мужем», «я и жена»)?"}
+      - {value: children, label: "Дети", detect: "Упоминаются ли дети автора как часть семьи, которая переезжает или живёт вместе с ним (например, «мы с детьми», «двое детей», «перевезти сына»)?"}
+      - {value: parents, label: "Родители", detect: "Упоминаются ли мать или отец автора как часть семьи, которая переезжает вместе с ним (например, «и моя мама»)?"}
+      - {value: other, label: "Другие родственники"}
+  - key: children_count
+    scope: case
+    type: int
+    label: "Сколько детей переезжает"
+    depends_on: [family_moving]
+  - key: has_housing
+    scope: case
+    type: bool
+    label: "Жильё в Болгарии"
+    detect: "Указано ли, что в Болгарии уже есть жильё (своя квартира, дом или долгосрочная аренда)?"
+  - key: goal
+    scope: case
+    type: enum
+    label: "Главная цель"
+    essential: false
+    options:
+      - {value: live, label: "Просто жить в Болгарии"}
+      - {value: work, label: "Работать в Болгарии"}
+      - {value: family, label: "Жить вместе с семьёй"}
+      - {value: long_term, label: "Остаться надолго, в перспективе — постоянно"}
+      - {value: study, label: "Учиться"}
+  # ---------------- участник (person)
+  - key: relation
+    scope: person
+    type: enum
+    label: "Кем приходится"
+    derived: true
+    options:
+      - {value: spouse, label: "супруг(а)"}
+      - {value: child, label: "ребёнок"}
+      - {value: parent, label: "родитель"}
+      - {value: other, label: "другой родственник"}
+  - key: citizenship_group
+    scope: person
+    type: multi
+    label: "Гражданство"
+    options:
+      - {value: bg, label: "Болгарии", detect: "Указано ли, что у этого человека есть гражданство Болгарии?"}
+      - {value: eu, label: "Страны ЕС, ЕЭЗ или Швейцарии", detect: "Указано ли гражданство страны Евросоюза, Норвегии, Исландии, Лихтенштейна или Швейцарии?"}
+      - {value: third, label: "Другой страны", detect: "Указано ли гражданство страны вне Евросоюза (например, России, Украины, Беларуси, Казахстана, Турции, Израиля)?"}
+  - key: residence
+    scope: person
+    type: enum
+    label: "Где живёт сейчас"
+    essential: false
+    options:
+      - {value: bulgaria, label: "В Болгарии"}
+      - {value: home, label: "В стране своего гражданства"}
+      - {value: other_eu, label: "В другой стране ЕС"}
+      - {value: other, label: "В другой стране"}
+  - key: status_in_bg
+    scope: person
+    type: enum
+    label: "Статус в Болгарии"
+    options:
+      - {value: none, label: "Нет статуса (безвиз, туристическая виза)"}
+      - {value: visa_d, label: "Виза D"}
+      - {value: long_term, label: "ВНЖ (продължително пребиваване)"}
+      - {value: permanent, label: "ПМЖ или долгосрочное пребывание"}
+      - {value: protection, label: "Убежище или международная защита"}
+  - key: income_sources
+    scope: person
+    type: multi
+    label: "Занятость и доходы"
+    options:
+      - {value: pension, label: "Получаю пенсию", detect: "Указано ли, что человек получает пенсию или является пенсионером?"}
+      - {value: remote_employee, label: "Работаю удалённо по найму в иностранной компании", detect: "Указано ли, что человек работает удалённо по трудовому договору на компанию за пределами Болгарии?"}
+      - {value: freelance_foreign, label: "Фриланс или ИП с зарубежными клиентами", detect: "Указано ли, что человек работает на себя (фриланс, ИП, самозанятый) с клиентами за пределами Болгарии?"}
+      - {value: own_company_abroad, label: "Владею или руковожу компанией за рубежом", detect: "Указано ли, что человек владеет иностранной компанией, является её совладельцем или руководителем?"}
+      - {value: job_offer_bg, label: "Есть предложение работы в Болгарии", detect: "Указано ли, что у человека есть предложение работы или договорённость с работодателем в Болгарии?"}
+      - {value: business_bg, label: "Хочу открыть бизнес в Болгарии и нанимать людей", detect: "Указано ли, что человек хочет открыть или уже открыл бизнес в Болгарии?"}
+      - {value: passive, label: "Живу на сбережения, аренду или дивиденды", detect: "Указано ли, что человек живёт на сбережения, доходы от аренды, вкладов или дивидендов?"}
+      - {value: none, label: "Ничего из этого"}
+  - key: ties
+    scope: person
+    type: multi
+    label: "Связи и планы, связанные с Болгарией"
+    detect_author: true
+    options:
+      - {value: spouse_bg, label: "Супруг(а) — гражданин(ка) Болгарии", detect: "Указано ли, что муж или жена автора — гражданин Болгарии?"}
+      - {value: relative_resident, label: "Супруг(а) или родитель уже живёт в Болгарии с ВНЖ/ПМЖ", detect: "Упоминается ли близкий родственник (супруг, родитель), который уже живёт в Болгарии с видом на жительство?"}
+      - {value: eu_relative, label: "Близкий родственник — гражданин ЕС", detect: "Упоминается ли близкий родственник с гражданством страны Евросоюза?"}
+      - {value: bg_origin, label: "Болгарские корни (происхождение)", detect: "Указано ли болгарское происхождение или болгарские корни?"}
+      - {value: study, label: "Учёба в болгарском вузе", detect: "Указано ли, что человек поступает, поступил или хочет учиться в болгарском университете?"}
+      - {value: investment, label: "Крупная инвестиция в Болгарии (недвижимость, бизнес)", detect: "Указано ли намерение вложить крупную сумму в недвижимость или бизнес в Болгарии?"}
+      - {value: none, label: "Ничего из этого"}
+  - key: pension_amount_eur
+    scope: person
+    type: money
+    label: "Пенсия в месяц"
+    unit_label: "€ в месяц"
+    depends_on: [income_sources]
+  - key: pension_doc
+    scope: person
+    type: bool
+    label: "Документ о назначении пенсии"
+    depends_on: [income_sources]
+  - key: employer_outside_eu
+    scope: person
+    type: bool
+    label: "Работодатель зарегистрирован вне ЕС/ЕЭЗ/Швейцарии"
+    depends_on: [income_sources]
+  - key: company_outside_eu
+    scope: person
+    type: bool
+    label: "Компания зарегистрирована вне ЕС/ЕЭЗ/Швейцарии"
+    depends_on: [income_sources]
+  - key: company_share_over_25
+    scope: person
+    type: bool
+    label: "Доля в компании больше 25%"
+    depends_on: [income_sources]
+  - key: freelance_one_year
+    scope: person
+    type: bool
+    label: "Работает удалённо на клиентов не меньше года"
+    depends_on: [income_sources]
+  - key: clients_in_bg
+    scope: person
+    type: bool
+    label: "Будет работать на клиентов в Болгарии"
+    depends_on: [income_sources]
+  - key: income_prev_year_eur
+    scope: person
+    type: money
+    label: "Доход за прошлый календарный год (брутто)"
+    unit_label: "€ в год"
+    depends_on: [income_sources]
+  - key: rep_company_ready
+    scope: person
+    type: bool
+    label: "Компания готова открыть представительство в Болгарии"
+    depends_on: [income_sources]
+  - key: rep_turnover_ok
+    scope: person
+    type: bool
+    label: "Оборот компании достаточный два года подряд"
+    depends_on: [rep_company_ready]
+  - key: rep_tax_clean
+    scope: person
+    type: bool
+    label: "У компании нет налоговых долгов"
+    depends_on: [rep_company_ready]
+  - key: job_skills
+    scope: person
+    type: bool
+    label: "Есть образование или опыт для предлагаемой должности"
+    depends_on: [income_sources]
+  - key: higher_education
+    scope: person
+    type: enum
+    label: "Образование и опыт"
+    depends_on: [income_sources]
+    options:
+      - {value: higher_3y, label: "Высшее образование (не меньше 3 лет обучения)"}
+      - {value: ict_3y, label: "Нет высшего, но 3+ года опыта в IT за последние 7 лет"}
+      - {value: exp_5y, label: "Нет высшего, но 5+ лет опыта на должности уровня высшего образования"}
+      - {value: none, label: "Ничего из этого"}
+  - key: salary_blue_card
+    scope: person
+    type: bool
+    label: "Зарплата по предложению не ниже 1,5 средней зарплаты в Болгарии"
+    depends_on: [income_sources]
+  - key: contract_6m
+    scope: person
+    type: bool
+    label: "Трудовой договор не короче 6 месяцев"
+    depends_on: [income_sources]
+  - key: jobs_10_ready
+    scope: person
+    type: bool
+    label: "Готов(а) создать 10 рабочих мест для граждан Болгарии"
+    depends_on: [income_sources]
+  - key: full_time_study
+    scope: person
+    type: bool
+    label: "Обучение очное"
+    depends_on: [ties]
+  - key: study_admitted
+    scope: person
+    type: bool
+    label: "Есть подтверждение о зачислении"
+    depends_on: [ties]
+  - key: bg_origin_doc
+    scope: person
+    type: bool
+    label: "Документ о болгарском происхождении"
+    depends_on: [ties]
+  - key: invest_kind
+    scope: person
+    type: enum
+    label: "Вид инвестиции"
+    depends_on: [ties]
+    options:
+      - {value: real_estate, label: "Покупка недвижимости"}
+      - {value: company_region, label: "Вложение в болгарскую компанию в отстающем регионе"}
+      - {value: other, label: "Другое"}
+  - key: invest_amount_eur
+    scope: person
+    type: money
+    label: "Сумма инвестиции"
+    unit_label: "€"
+    depends_on: [ties]
+  - key: invest_loan_ok
+    scope: person
+    type: bool
+    label: "Без кредита или непогашенный кредит не больше 25%"
+    depends_on: [invest_kind]
+  - key: region_share_50
+    scope: person
+    type: bool
+    label: "Доля в компании не меньше 50%"
+    depends_on: [invest_kind]
+  - key: region_jobs_ready
+    scope: person
+    type: bool
+    label: "Готов(а) создать 5 рабочих мест для граждан Болгарии"
+    depends_on: [invest_kind]
+  - key: relation_docs
+    scope: person
+    type: bool
+    label: "Есть документ о браке или рождении"
+  - key: child_adult
+    scope: person
+    type: bool
+    label: "Ребёнку уже есть 18 лет"
+  - key: sponsor_permit_1y
+    scope: person
+    type: bool
+    label: "Разрешение на пребывание выдано не меньше чем на год"
+    depends_on: [status_in_bg]
+  - key: eu_activity
+    scope: person
+    type: enum
+    label: "Чем будет заниматься гражданин ЕС"
+    options:
+      - {value: work, label: "Работать по найму или на себя"}
+      - {value: means, label: "Жить на свои средства (есть медстраховка)"}
+      - {value: study, label: "Учиться (есть медстраховка и средства)"}
+      - {value: none, label: "Ничего из этого"}
+
+questions:
+  # ---------------- базовые
+  - id: q_who
+    fact: who_moves
+    core: true
+    priority: 10
+    allow_unknown: false
+    text: "Для кого вы рассматриваете переезд?"
+    help: "Если подбираете для родственника или знакомого — выберите «Для другого человека» и дальше отвечайте за него."
+  - id: q_citizenship
+    fact: citizenship_group
+    core: true
+    priority: 20
+    ask_for: [main, member]
+    text: "Какое у вас гражданство? Отметьте все, если их несколько."
+    text_member: "Какое гражданство у {who}? Отметьте все, если их несколько."
+    help: "От гражданства зависит правовой режим: для граждан ЕС и для граждан других стран правила разные. Двойное гражданство тоже важно — отметьте все."
+  - id: q_residence
+    fact: residence
+    core: true
+    priority: 25
+    text: "Где вы живёте сейчас?"
+    help: "Это влияет на то, где подавать документы: визу D обычно оформляют в консульстве Болгарии за рубежом."
+  - id: q_status
+    fact: status_in_bg
+    core: true
+    priority: 30
+    ask_if: {op: eq, fact: case.who_moves, value: already_in_bg}
+    text: "Какой у вас сейчас статус в Болгарии?"
+    help: "ВНЖ — карта иностранца с ограниченным сроком. ПМЖ — постоянное пребывание. Если вы въехали без визы или как турист, выберите первый вариант."
+  - id: q_family
+    fact: family_moving
+    core: true
+    priority: 40
+    ask_if: {op: in, fact: case.who_moves, values: [self_family, already_in_bg]}
+    text: "Кто из семьи переедет к вам или вместе с вами?"
+  - id: q_children
+    fact: children_count
+    core: true
+    priority: 41
+    allow_unknown: false
+    ask_if: {op: in, fact: case.family_moving, values: [children]}
+    text: "Сколько детей переезжает с вами? Напишите число."
+  - id: q_income
+    fact: income_sources
+    core: true
+    priority: 50
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text: "Чем вы занимаетесь и откуда доходы? Отметьте всё, что подходит."
+    text_member: "Чем занимается {who} и откуда доходы? Отметьте всё, что подходит."
+    help: "Это нужно, чтобы проверить разные основания: пенсию, удалённую работу, работу в Болгарии, бизнес. Отметьте всё — это не сузит, а расширит подбор."
+  - id: q_ties
+    fact: ties
+    core: true
+    priority: 60
+    text: "Есть ли что-то из этого? Отметьте всё, что подходит."
+    help: "Это контрольный вопрос: он помогает не упустить варианты, о которых вы могли не подумать."
+  - id: q_goal
+    fact: goal
+    core: true
+    priority: 200
+    text: "Что для вас сейчас главное?"
+    help: "Цель не исключает варианты, а помогает выбрать, какой проверить первым."
+  # ---------------- уточнения по основаниям
+  - id: q_pension_amount
+    fact: pension_amount_eur
+    priority: 100
+    ask_if: {op: in, fact: self.income_sources, values: [pension]}
+    text: "Какой у вас размер пенсии в месяц? Напишите сумму в евро, можно примерно."
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text_member: "Какой размер пенсии у {who} в месяц? Напишите сумму в евро."
+    help: "Если пенсия в другой валюте, переведите в евро по текущему курсу примерно."
+  - id: q_pension_doc
+    fact: pension_doc
+    priority: 105
+    ask_if: {op: in, fact: self.income_sources, values: [pension]}
+    text: "Есть ли у вас официальный документ о назначении пенсии (или его можно получить)?"
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text_member: "Есть ли у {who} официальный документ о назначении пенсии (или его можно получить)?"
+  - id: q_housing
+    fact: has_housing
+    priority: 150
+    text: "Есть ли у вас жильё в Болгарии — своё или договор аренды?"
+    help: "Подтверждённое жильё — одно из общих условий для ВНЖ. Если пока нет — это можно решить позже."
+  - id: q_employer_outside_eu
+    fact: employer_outside_eu
+    priority: 110
+    ask_if: {op: in, fact: self.income_sources, values: [remote_employee]}
+    text: "Ваш работодатель зарегистрирован за пределами ЕС, Норвегии, Исландии, Лихтенштейна и Швейцарии?"
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text_member: "Работодатель {who} зарегистрирован за пределами ЕС, Норвегии, Исландии, Лихтенштейна и Швейцарии?"
+  - id: q_company_outside_eu
+    fact: company_outside_eu
+    priority: 111
+    ask_if: {op: in, fact: self.income_sources, values: [own_company_abroad]}
+    text: "Ваша компания зарегистрирована за пределами ЕС, Норвегии, Исландии, Лихтенштейна и Швейцарии?"
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text_member: "Компания {who} зарегистрирована за пределами ЕС, Норвегии, Исландии, Лихтенштейна и Швейцарии?"
+  - id: q_company_share
+    fact: company_share_over_25
+    priority: 112
+    ask_if: {op: in, fact: self.income_sources, values: [own_company_abroad]}
+    text: "Ваша доля в этой компании больше 25%?"
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text_member: "Доля {who} в этой компании больше 25%?"
+  - id: q_freelance_year
+    fact: freelance_one_year
+    priority: 113
+    ask_if: {op: in, fact: self.income_sources, values: [freelance_foreign]}
+    text: "Вы работаете удалённо на своих клиентов уже не меньше года?"
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text_member: "Стаж удалённой работы на своих клиентов у {who} — не меньше года?"
+  - id: q_clients_bg
+    fact: clients_in_bg
+    priority: 114
+    ask_if: {op: in, fact: self.income_sources, values: [freelance_foreign, own_company_abroad]}
+    text: "Планируете ли вы работать или оказывать услуги клиентам в Болгарии?"
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text_member: "Планы {who}: работать или оказывать услуги клиентам в Болгарии?"
+  - id: q_income_prev_year
+    fact: income_prev_year_eur
+    priority: 115
+    ask_if: {op: in, fact: self.income_sources, values: [remote_employee, freelance_foreign, own_company_abroad]}
+    text: "Какой был ваш общий доход за прошлый календарный год до налогов? Напишите сумму в евро."
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text_member: "Какой был общий доход {who} за прошлый календарный год до налогов? Напишите сумму в евро."
+    help: "Для варианта для удалённых работников закон смотрит на доход за предыдущий календарный год до налогов (брутто)."
+  - id: q_rep_ready
+    fact: rep_company_ready
+    priority: 120
+    ask_if: {op: in, fact: self.income_sources, values: [own_company_abroad, remote_employee]}
+    text: "Может ли иностранная компания, с которой вы связаны, открыть представительство в Болгарии и назначить вас представителем?"
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text_member: "Может ли иностранная компания, с которой связан этот человек ({who}), открыть представительство в Болгарии и назначить его представителем?"
+    help: "Торговое представительство — это зарегистрированное в Болгарии представительство иностранной компании. Его представитель может получить ВНЖ."
+  - id: q_rep_turnover
+    fact: rep_turnover_ok
+    priority: 121
+    ask_if: {op: known_true, fact: self.rep_company_ready}
+    text: "Был ли у компании годовой оборот не меньше {param:trade_rep_turnover} в каждом из двух последних лет?"
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text_member: "Был ли у компании {who} годовой оборот не меньше {param:trade_rep_turnover} в каждом из двух последних лет?"
+  - id: q_rep_tax
+    fact: rep_tax_clean
+    priority: 122
+    ask_if: {op: known_true, fact: self.rep_company_ready}
+    text: "У компании нет долгов по налогам?"
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text_member: "У компании {who} нет долгов по налогам?"
+  - id: q_job_skills
+    fact: job_skills
+    priority: 130
+    ask_if: {op: in, fact: self.income_sources, values: [job_offer_bg]}
+    text: "Есть ли у вас образование или опыт, которые подходят для предлагаемой должности?"
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text_member: "Есть ли у {who} образование или опыт, которые подходят для предлагаемой должности?"
+  - id: q_higher_education
+    fact: higher_education
+    priority: 131
+    ask_if: {op: in, fact: self.income_sources, values: [job_offer_bg]}
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text: "Какое у вас образование и опыт?"
+    text_member: "Какое образование и опыт у {who}?"
+    help: "Это нужно для проверки Синей карты ЕС: она требует высшего образования или длительного профессионального опыта."
+  - id: q_salary_blue_card
+    fact: salary_blue_card
+    priority: 132
+    ask_if: {op: in, fact: self.income_sources, values: [job_offer_bg]}
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text: "Зарплата по предложению не меньше чем в полтора раза выше средней зарплаты в Болгарии?"
+    text_member: "Зарплата по предложению для {who} не меньше чем в полтора раза выше средней зарплаты в Болгарии?"
+    help: "Если не знаете — нажмите «Не знаю». Работодатель обычно может это уточнить."
+  - id: q_contract_6m
+    fact: contract_6m
+    priority: 133
+    ask_if: {op: in, fact: self.income_sources, values: [job_offer_bg]}
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text: "Трудовой договор предлагают на срок не меньше 6 месяцев?"
+    text_member: "Трудовой договор для {who} предлагают на срок не меньше 6 месяцев?"
+  - id: q_jobs_10
+    fact: jobs_10_ready
+    priority: 140
+    ask_if: {op: in, fact: self.income_sources, values: [business_bg]}
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text: "Готовы ли вы создать и поддерживать не меньше {param:business_jobs_count} рабочих мест на полный день для граждан Болгарии?"
+    text_member: "Готов(а) ли человек ({who}) создать и поддерживать не меньше {param:business_jobs_count} рабочих мест на полный день для граждан Болгарии?"
+    help: "Сама регистрация фирмы права на ВНЖ не даёт: закон требует рабочих мест для граждан Болгарии."
+  - id: q_full_time
+    fact: full_time_study
+    priority: 160
+    ask_if: {op: in, fact: self.ties, values: [study]}
+    text: "Обучение очное (дневная форма)?"
+  - id: q_study_admitted
+    fact: study_admitted
+    priority: 161
+    ask_if: {op: in, fact: self.ties, values: [study]}
+    text: "У вас уже есть подтверждение о зачислении в болгарский вуз?"
+  - id: q_bg_origin_doc
+    fact: bg_origin_doc
+    priority: 170
+    ask_if: {op: in, fact: self.ties, values: [bg_origin]}
+    text: "Есть ли у вас документ, подтверждающий болгарское происхождение?"
+  - id: q_invest_kind
+    fact: invest_kind
+    priority: 180
+    ask_if: {op: in, fact: self.ties, values: [investment]}
+    text: "Какую инвестицию вы рассматриваете?"
+  - id: q_invest_amount
+    fact: invest_amount_eur
+    priority: 181
+    ask_if: {op: in, fact: self.ties, values: [investment]}
+    text: "Какую сумму вы готовы вложить? Напишите в евро."
+  - id: q_invest_loan
+    fact: invest_loan_ok
+    priority: 182
+    ask_if: {op: eq, fact: self.invest_kind, value: real_estate}
+    text: "Покупка будет без кредита (или непогашенная часть кредита не больше 25%)?"
+  - id: q_region_share
+    fact: region_share_50
+    priority: 183
+    ask_if: {op: eq, fact: self.invest_kind, value: company_region}
+    text: "Ваша доля в этой компании будет не меньше 50%?"
+  - id: q_region_jobs
+    fact: region_jobs_ready
+    priority: 184
+    ask_if: {op: eq, fact: self.invest_kind, value: company_region}
+    text: "Готовы ли вы создать не меньше {param:region_jobs_count} рабочих мест для граждан Болгарии?"
+  # ---------------- члены семьи
+  - id: q_relation_docs
+    fact: relation_docs
+    priority: 190
+    ask_for: [member]
+    text: "Есть ли документ, подтверждающий родство (свидетельство о браке или рождении)?"
+    text_member: "Есть ли документ, подтверждающий родство с {who} (свидетельство о браке или рождении)?"
+  - id: q_child_adult
+    fact: child_adult
+    priority: 191
+    ask_for: [member]
+    member_relations: [child]
+    text: "Ребёнку уже исполнилось 18 лет?"
+    text_member: "Есть ли уже 18 лет у {who}?"
+  - id: q_sponsor_permit_1y
+    fact: sponsor_permit_1y
+    priority: 192
+    ask_if: {op: in, fact: self.status_in_bg, values: [long_term]}
+    text: "Ваше текущее разрешение на пребывание выдано на срок не меньше года?"
+  - id: q_eu_activity
+    fact: eu_activity
+    priority: 195
+    ask_if: {op: in, fact: self.citizenship_group, values: [eu]}
+    text: "Чем вы планируете заниматься в Болгарии?"
+    ask_for: [main, member]
+    member_relations: [spouse, parent, other]
+    text_member: "Чем планирует заниматься в Болгарии {who}?"

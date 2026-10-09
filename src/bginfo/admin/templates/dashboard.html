@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Главная{% endblock %}
+{% block content %}
+<h1>Главная</h1>
+
+{% if demo_in_prod %}
+<div class="alert error big" role="alert">
+  <strong>ВНИМАНИЕ:</strong> бот работает в режиме production, а действующий выпуск №{{ active.release_id }} — демонстрационный
+  (тестовые карточки). Опубликуйте настоящую базу.
+</div>
+{% endif %}
+
+<div class="cards">
+  <section class="card">
+    <h2>Действующий выпуск</h2>
+    {% if active %}
+      <p class="big">№{{ active.release_id }}</p>
+      <p>вступил в силу: {{ active.effective_from | local_dt }} ({{ tz_name }})</p>
+      <p><a href="/releases/{{ active.release_id }}">Состав и отличия от предыдущего</a></p>
+    {% else %}
+      <p class="alert error">Опубликованного выпуска нет: бот отвечает, что база ещё не готова.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Черновик</h2>
+    {% if dirty %}
+      <p class="alert warn">Есть неопубликованные изменения:
+        добавлено {{ diff_counts.get('added', 0) }}, изменено {{ diff_counts.get('changed', 0) }},
+        удалено {{ diff_counts.get('removed', 0) }}.</p>
+      <p><a class="button" href="/publish">Проверить и опубликовать</a></p>
+    {% else %}
+      <p>Черновик совпадает с действующим выпуском.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Запланированные выпуски</h2>
+    {% for r in scheduled %}
+      <p>№{{ r.id }} — {{ r.effective_from | local_dt }} ({{ r.created_by }}){% if r.comment %}: {{ r.comment }}{% endif %}</p>
+    {% else %}
+      <p class="muted">Нет.</p>
+    {% endfor %}
+    <p><a href="/history">История выпусков</a></p>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Основания по статусам</h2>
+  <table>
+    <thead><tr><th>Статус</th><th>В черновике</th><th>В действующем выпуске</th></tr></thead>
+    <tbody>
+    {% for k, label in GROUND_STATUS_RU.items() %}
+      <tr><td>{{ label }}</td><td>{{ draft_counts[k] }}</td><td>{{ active_counts[k] if active_counts else '—' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors_box with context %}
+{% block title %}Тестовая анкета{% endblock %}
+
+{% macro fact_field(pid, f) %}
+{% set name = 'f-' ~ pid ~ '-' ~ f.key %}
+<div class="qfield">
+  <span class="qlabel">{{ f.label }}</span>
+  {% if f.type == 'bool' %}
+    <select name="{{ name }}">
+      <option value="">— не выяснено —</option>
+      <option value="yes" {{ 'selected' if form.get(name) == 'yes' }}>да</option>
+      <option value="no" {{ 'selected' if form.get(name) == 'no' }}>нет</option>
+    </select>
+  {% elif f.type == 'enum' %}
+    <select name="{{ name }}">
+      <option value="">— не выяснено —</option>
+      {% for o in f.options %}<option value="{{ o.value }}" {{ 'selected' if form.get(name) == o.value }}>{{ o.label }}</option>{% endfor %}
+    </select>
+  {% elif f.type == 'multi' %}
+    <span class="checks">
+      {% for o in f.options %}<label class="check"><input type="checkbox" name="{{ name }}" value="{{ o.value }}" {{ 'checked' if o.value in form.getlist(name) }}> {{ o.label }}</label>{% endfor %}
+      <label class="check"><input type="checkbox" name="{{ name }}-none" {{ 'checked' if form.get(name ~ '-none') }}> ничего из перечисленного</label>
+    </span>
+  {% elif f.type == 'date' %}
+    <input type="date" name="{{ name }}" value="{{ form.get(name, '') }}">
+  {% else %}
+    <input name="{{ name }}" value="{{ form.get(name, '') }}" inputmode="decimal" size="10"> {{ f.unit_label if f.type == 'money' }}
+  {% endif %}
+  <label class="check"><input type="checkbox" name="{{ name }}-unk" {{ 'checked' if form.get(name ~ '-unk') }}> не знаю</label>
+</div>
+{% endmacro %}
+
+{% block content %}
+<h1>Тестовая анкета</h1>
+<p class="muted">Прогон движка по введённым данным без вызова AI. Пустое поле — факт не выяснен; «не знаю» — пользователь ответил «не знаю». Сообщение собирается по шаблону.</p>
+<p>Источник правил:
+  <a href="/preview?source=draft" class="{{ 'on' if source == 'draft' }}">черновик</a> ·
+  <a href="/preview?source=active" class="{{ 'on' if source == 'active' }}">действующий выпуск</a>
+  (сейчас: <strong>{{ source_label }}</strong>)
+</p>
+{{ errors_box(errors) }}
+
+{% if kb is none %}
+  <div class="alert error">Действующего выпуска ещё нет.</div>
+{% else %}
+<form method="post" action="/preview" class="edit">
+  {{ csrf_field() }}
+  <input type="hidden" name="source" value="{{ source }}">
+  <fieldset>
+    <legend>Расчёт</legend>
+    <label>Дата расчёта (можно в будущем — проверка грядущих изменений) <input type="date" name="as_of" value="{{ as_of }}" required></label>
+    <label class="check"><input type="checkbox" name="with_spouse" {{ 'checked' if with_spouse }}> добавить супруга(у)</label>
+  </fieldset>
+  <fieldset>
+    <legend>Анкета в целом</legend>
+    {% for f in case_facts %}{{ fact_field('case', f) }}{% else %}<p class="muted">Нет фактов уровня анкеты.</p>{% endfor %}
+  </fieldset>
+  <fieldset>
+    <legend>Вы (основной заявитель)</legend>
+    {% for f in person_facts %}{{ fact_field('p0', f) }}{% endfor %}
+  </fieldset>
+  {% if with_spouse %}
+  <fieldset>
+    <legend>Супруг(а)</legend>
+    {% for f in person_facts %}{{ fact_field('p1', f) }}{% endfor %}
+  </fieldset>
+  {% else %}<p class="muted small">Чтобы заполнить факты супруга(и), отметьте «добавить супруга(у)» и нажмите «Показать результат»: поля появятся.</p>{% endif %}
+  <div class="actions"><button type="submit">Показать результат</button></div>
+</form>
+{% endif %}
+
+{% if result %}
+<section class="card">
+  <h2>Основания и статусы (расчёт на {{ result.as_of.strftime('%d.%m.%Y') }})</h2>
+  <p class="muted small">В расчёте участвуют только основания со статусом «опубликована» и «требует проверки».</p>
+  <table>
+    <thead><tr><th>Кто</th><th>Основание</th><th>Статус</th><th>Причины</th><th>Не хватает данных</th><th>Требования</th></tr></thead>
+    <tbody>
+    {% for r in result.rows %}
+      <tr class="st-{{ r.status }}">
+        <td>{{ r.who }}</td>
+        <td>{{ r.ground }} <code>{{ r.ground_id }}</code></td>
+        <td><strong>{{ r.status_label }}</strong></td>
+        <td>{% for x in r.reasons %}{{ x }}{{ '; ' if not loop.last }}{% endfor %}</td>
+        <td>{{ r.missing | join(', ') }}</td>
+        <td><details><summary>{{ r.reqs|length }}</summary>
+          <ul>{% for label, res, disputed in r.reqs %}<li>{{ label }}: {{ {'true': 'выполнено', 'false': 'не выполнено', 'unknown': 'неизвестно'}[res] }}{{ ' (спорно / не подтверждено)' if disputed }}</li>{% endfor %}</ul>
+        </details></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">Нет подходящих оснований для расчёта.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Сообщение бота (как увидит пользователь)</h2>
+  {# БЕЗОПАСНОСТЬ: render_result формирует разметку Telegram из доверенного кода и пропускает любой текст
+     из базы через html.escape, а ссылки экранирует с quote=True. Поэтому здесь |safe допустим; это единственное
+     место в админке, где |safe используется. #}
+  <div class="tg-preview">{{ result.html | safe }}</div>
+</section>
+{% endif %}
+{% endblock %}

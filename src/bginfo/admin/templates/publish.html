@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field with context %}
+{% block title %}Проверка и публикация{% endblock %}
+{% block content %}
+<h1>Проверка и публикация</h1>
+
+{% if errors %}<div class="alert error" role="alert"><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+{% if publish_issues %}
+<div class="alert error" role="alert">
+  <strong>Публикация отклонена, найдены ошибки:</strong>
+  <ul>{% for i in publish_issues %}<li>{{ i.where }}: {{ i.message }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<section class="card">
+  <h2>1. Проверка черновика</h2>
+  {% if issues %}
+  <table>
+    <thead><tr><th>Уровень</th><th>Где</th><th>Что не так</th></tr></thead>
+    <tbody>
+    {% for i in issues %}
+      <tr class="{{ 'bad' if i.level == 'error' else 'warn' }}"><td>{{ 'ошибка' if i.level == 'error' else 'предупреждение' }}</td><td>{{ i.where }}</td><td>{{ i.message }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="alert ok">Замечаний нет.</p>{% endif %}
+  {% if has_errors %}<p class="alert error">Есть ошибки: публикация недоступна, пока они не исправлены.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>2. Что изменится по сравнению с {% if active %}действующим выпуском №{{ active.release_id }}{% else %}пустой базой{% endif %}</h2>
+  {% include "_diff.html" %}
+</section>
+
+<section class="card">
+  <h2>3. Публикация</h2>
+  <form method="post" action="/publish" class="edit">
+    {{ csrf_field() }}
+    <input type="hidden" name="draft_revision" value="{{ draft_rev }}">
+    <label>Комментарий <input name="comment" value="{{ values.comment or '' }}" maxlength="500" placeholder="что изменилось и почему"></label>
+    <label>Вступит в силу ({{ tz_name }}; пусто — сразу)
+      <input type="datetime-local" name="effective_from" value="{{ values.effective_from or '' }}"></label>
+    <p class="muted small">Выпуск с будущей датой начнёт действовать сам, без перезапуска бота. Задним числом публиковать нельзя.</p>
+    <button type="submit" {{ 'disabled' if has_errors }}>Опубликовать</button>
+  </form>
+</section>
+{% endblock %}

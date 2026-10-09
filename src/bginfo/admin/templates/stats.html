@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Статистика{% endblock %}
+{% block content %}
+<h1>Статистика за {{ days }} дней</h1>
+<p class="muted">Дни по UTC. Тексты пользователей не хранятся.</p>
+<table>
+  <thead>
+    <tr><th>День</th>{% for k, label in event_kinds %}<th>{{ label }}</th>{% endfor %}<th>AI-вызовы</th><th>Ошибки AI</th><th>Стоимость, $</th></tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr><td>{{ r.day }}</td>{% for k, label in event_kinds %}<td>{{ r.events.get(k, 0) }}</td>{% endfor %}
+        <td>{{ r.calls }}</td><td>{{ r.ai_errors }}</td><td>{{ '%.4f' | format(r.cost) }}</td></tr>
+  {% else %}
+    <tr><td colspan="{{ event_kinds|length + 4 }}" class="muted">Данных пока нет.</td></tr>
+  {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr><th>Итого</th>{% for k, label in event_kinds %}<th>{{ totals.events[k] }}</th>{% endfor %}
+        <th>{{ totals.calls }}</th><th></th><th>{{ '%.4f' | format(totals.cost) }}</th></tr>
+  </tfoot>
+</table>
+
+<h2>Последние 50 действий в админке</h2>
+<table>
+  <thead><tr><th>Когда</th><th>Кто</th><th>Действие</th><th>Объект</th><th>Подробности</th></tr></thead>
+  <tbody>
+  {% for a in audit %}
+    <tr><td>{{ a['at'] | local_dt }}</td><td>{{ a['actor'] }}</td><td>{{ a['action'] }}</td><td>{{ a['target'] }}</td><td>{{ a['detail'] }}</td></tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">Журнал пуст.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

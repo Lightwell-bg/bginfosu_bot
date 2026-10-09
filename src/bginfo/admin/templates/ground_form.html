@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors_box, select, research_select, source_select, cond_builder, leaf_template, notes_block, param_hint with context %}
+{% block title %}{{ 'Новое основание' if is_new else 'Основание ' ~ item.id }}{% endblock %}
+
+{% macro req_block(i, r) %}
+{% set p = 'req-' ~ i %}
+<div class="row-item req">
+  <input type="hidden" name="req_idx" value="{{ i }}">
+  <div class="grid">
+    <label>ID требования <input name="{{ p }}-id" value="{{ r.id }}" placeholder="например, has_pension"></label>
+    <label class="wide">Название (подпись) <input name="{{ p }}-label" value="{{ r.label }}"></label>
+    <label>Тип {{ select(p ~ '-kind', CHOICES.req_kind, r.kind) }}</label>
+    <label>Этап {{ select(p ~ '-stage', CHOICES.stage, r.stage) }}</label>
+    <label>Если не выполнено {{ select(p ~ '-on_fail', CHOICES.on_fail, r.on_fail) }}</label>
+  </div>
+  <label>Текст, если не выполнено <textarea name="{{ p }}-fail_text" rows="2">{{ r.fail_text }}</textarea></label>
+  <label>Текст, если неизвестно <textarea name="{{ p }}-unknown_text" rows="2">{{ r.unknown_text }}</textarea></label>
+  <label>Источники (Ctrl+клик — несколько) {{ source_select(p ~ '-source_ids', r.source_ids) }}</label>
+
+  <fieldset class="verify">
+    <legend>Проверка требования</legend>
+    <div class="grid">
+      <label>Итог первоначального исследования {{ research_select(p ~ '-research_status', r.research_status) }}</label>
+      <label class="wide">Заметка исследования <textarea name="{{ p }}-research_note" rows="2">{{ r.research_note }}</textarea></label>
+    </div>
+    <p class="muted small">{{ RESEARCH_HINT }}</p>
+    <div class="grid">
+      <label class="check"><input type="checkbox" name="{{ p }}-verified" {{ 'checked' if r.verified }}> подтверждено</label>
+      <label>Дата подтверждения <input type="date" name="{{ p }}-verified_at" value="{{ r.verified_at or '' }}"></label>
+      <label>Кем подтверждено <input name="{{ p }}-verified_by" value="{{ r.verified_by }}"></label>
+      <label class="check"><input type="checkbox" name="{{ p }}-disputed" {{ 'checked' if r.disputed }}> спорное</label>
+      <label class="wide">Причина спора <input name="{{ p }}-dispute_reason" value="{{ r.dispute_reason }}"></label>
+    </div>
+  </fieldset>
+
+  <div class="subhead">Условие выполнения требования</div>
+  {{ cond_builder(p ~ '-cond', r.cond, True) }}
+  <button type="button" class="link" data-remove>удалить требование</button>
+</div>
+{% endmacro %}
+
+{% macro uns_block(i, u) %}
+{% set p = 'uns-' ~ i %}
+<div class="row-item">
+  <input type="hidden" name="uns_idx" value="{{ i }}">
+  <label>Причина (что нужно разбирать индивидуально) <textarea name="{{ p }}-reason" rows="2">{{ u.reason }}</textarea></label>
+  <div class="subhead">Условие</div>
+  {{ cond_builder(p ~ '-cond', u.cond, True) }}
+  <button type="button" class="link" data-remove>удалить</button>
+</div>
+{% endmacro %}
+
+{% block content %}
+<h1>{{ 'Новое основание' if is_new else 'Основание: ' ~ item.title }}</h1>
+<p><a href="/grounds">← к списку оснований</a></p>
+
+{{ errors_box(errors) }}
+{% if conflict %}<div class="alert warn">Чтобы увидеть актуальную версию, <a href="/grounds/{{ item.id }}">откройте основание заново</a> (эта страница останется с вашими данными).</div>{% endif %}
+
+<form method="post" action="/grounds/{{ '_new' if is_new else item.id }}" class="edit">
+  {{ csrf_field() }}
+  <input type="hidden" name="revision" value="{{ revision }}">
+
+  <fieldset>
+    <legend>Основное</legend>
+    <div class="grid">
+      <label>ID {% if is_new %}<input name="id" value="{{ item.id }}" required placeholder="латиница, например pensioner">
+        {% else %}<input value="{{ item.id }}" readonly>{% endif %}</label>
+      <label class="wide">Название <input name="title" value="{{ item.title }}" required></label>
+      <label>Режим {{ select('regime', REGIME_RU, item.regime) }}</label>
+      <label>Для кого {{ select('subject', CHOICES.subject, item.subject) }}</label>
+      <label>Статус {{ select('status', GROUND_STATUS_RU, item.status) }}</label>
+      <label class="wide">Причина (для «требует проверки») <input name="review_reason" value="{{ item.review_reason }}"></label>
+      <label>Действует с <input type="date" name="valid_from" value="{{ item.valid_from or '' }}"></label>
+      <label>Действует по <input type="date" name="valid_to" value="{{ item.valid_to or '' }}"></label>
+      <label>Дата проверки <input type="date" name="checked_at" value="{{ item.checked_at or '' }}"></label>
+      <label>Кто проверил <input name="checked_by" value="{{ item.checked_by }}"></label>
+    </div>
+    <p class="muted small">Статус «опубликована» требует даты и автора проверки, подтверждённых требований и источников.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Тексты</legend>
+    {{ param_hint() }}
+    <label>Кратко (summary) <textarea name="summary" rows="3">{{ item.summary }}</textarea></label>
+    <label>Заметка для семьи (family_note) <textarea name="family_note" rows="2">{{ item.family_note }}</textarea></label>
+    <label>Заметка исследования (research_note) <textarea name="research_note" rows="3">{{ item.research_note }}</textarea></label>
+    <p class="muted small">{{ RESEARCH_HINT }}</p>
+    <label>Шаги (одна строка — один пункт) <textarea name="steps" rows="5">{{ item.steps | join('\n') }}</textarea></label>
+    <label>Документы (одна строка — один документ) <textarea name="documents" rows="5">{{ item.documents | join('\n') }}</textarea></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Цели переезда и ссылки</legend>
+    {% if goal_options %}
+    <div class="checks">
+      {% for v, label in goal_options %}<label class="check"><input type="checkbox" name="goals" value="{{ v }}" {{ 'checked' if v in item.goals }}> {{ label }}</label>{% endfor %}
+    </div>
+    {% endif %}
+    <label>Другие цели (через запятую) <input name="goals_extra" value="{{ goals_extra }}"></label>
+    <label>Страницы BGINFO (Ctrl+клик — несколько) {{ source_select('bginfo_source_ids', item.bginfo_source_ids, 'bginfo') }}</label>
+  </fieldset>
+
+  {{ notes_block('restrictions', item.restrictions, 'Ограничения') }}
+  {{ notes_block('practice_notes', item.practice_notes, 'Практические замечания') }}
+
+  <fieldset>
+    <legend>Кому подходит (applies_if)</legend>
+    <p class="muted small">Если условие не выполняется, основание не рассматривается. Пусто — рассматривается для всех.</p>
+    {{ cond_builder('applies_if', item.applies_if) }}
+  </fieldset>
+
+  <fieldset>
+    <legend>Требования</legend>
+    <div class="rows" id="rows-req">
+      {% for r in item.requirements %}{{ req_block(loop.index0, r) }}{% endfor %}
+    </div>
+    <button type="button" class="secondary" data-add data-template="tpl-req" data-target="rows-req">+ требование</button>
+    <template id="tpl-req">{{ req_block('__I__', {'id': '', 'label': '', 'kind': 'legal', 'stage': 'any', 'on_fail': 'not_eligible', 'fail_text': '', 'unknown_text': '', 'source_ids': [], 'verified': False, 'verified_at': '', 'verified_by': '', 'disputed': False, 'dispute_reason': '', 'research_status': '', 'research_note': '', 'cond': None}) }}</template>
+  </fieldset>
+
+  <fieldset>
+    <legend>Неподдерживаемые случаи (unsupported)</legend>
+    <p class="muted small">Если условие выполняется, бот скажет, что нужен индивидуальный разбор, и покажет причину.</p>
+    <div class="rows" id="rows-uns">
+      {% for u in item.unsupported %}{{ uns_block(loop.index0, u) }}{% endfor %}
+    </div>
+    <button type="button" class="secondary" data-add data-template="tpl-uns" data-target="rows-uns">+ случай</button>
+    <template id="tpl-uns">{{ uns_block('__I__', {'reason': '', 'cond': None}) }}</template>
+  </fieldset>
+
+  {{ leaf_template() }}
+
+  <div class="actions">
+    <button type="submit">Сохранить в черновик</button>
+  </div>
+</form>
+
+{% if not is_new %}
+<form method="post" action="/grounds/{{ item.id }}/delete" data-confirm="Удалить основание «{{ item.id }}» из черновика?" class="danger-zone">
+  {{ csrf_field() }}
+  <input type="hidden" name="revision" value="{{ revision }}">
+  <button type="submit" class="danger">Удалить из черновика</button>
+</form>
+{% endif %}
+{% endblock %}

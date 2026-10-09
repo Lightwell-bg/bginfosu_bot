@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field with context %}
+{% block title %}История{% endblock %}
+{% block content %}
+<h1>История выпусков</h1>
+<p class="muted">Время показано по поясу {{ tz_name }}. Выпуски не редактируются: откат создаёт новый выпуск с содержимым старого.</p>
+<table>
+  <thead><tr><th>№</th><th>Тип</th><th>Кто</th><th>Создан</th><th>Вступает в силу</th><th>Статус</th><th>Комментарий</th><th>Действия</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr class="{{ 'current' if r.state == 'действует сейчас' }}">
+      <td><a href="/releases/{{ r.id }}">№{{ r.id }}</a></td>
+      <td>{{ r.kind | release_kind }}</td>
+      <td>{{ r.created_by }}</td>
+      <td>{{ r.created_at | local_dt }}</td>
+      <td>{{ r.effective_from | local_dt }}</td>
+      <td>{{ r.state }}</td>
+      <td>{{ r.comment }}</td>
+      <td class="actions-cell">
+        {% if r.status != 'cancelled' and r.state != 'действует сейчас' and r.state != 'запланирован' %}
+        <form method="post" action="/history/{{ r.id }}/rollback" data-confirm="Откатить к выпуску №{{ r.id }}? Будет создан новый выпуск с его содержимым, он вступит в силу сразу.">
+          {{ csrf_field() }}<button type="submit" class="secondary">Откатить к этой версии</button>
+        </form>
+        {% endif %}
+        {% if r.state == 'запланирован' %}
+        <form method="post" action="/history/{{ r.id }}/cancel" data-confirm="Отменить запланированный выпуск №{{ r.id }}?">
+          {{ csrf_field() }}<button type="submit" class="danger">Отменить</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/history/{{ r.id }}/to-draft" data-confirm="Текущий черновик будет ЗАМЕНЁН содержимым выпуска №{{ r.id }}. Несохранённые в выпуск правки пропадут. Продолжить?">
+          {{ csrf_field() }}<button type="submit" class="secondary">Загрузить в черновик</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="muted">Выпусков ещё нет.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

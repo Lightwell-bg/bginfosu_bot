@@ -1,0 +1,104 @@
+# ОБРАЗЕЦ карточки. Статус draft, все требования verified=false:
+# одобрение и публикацию выполняет владелец в админке.
+id: pensioner
+title: "ВНЖ для пенсионеров"
+regime: third_country
+subject: applicant
+status: draft
+version: 1
+research_note: >-
+  Исследование 2026-10-09 (docs/research/KB_RESEARCH.md, раздел 2.1). Основание — чл. 24 ал. 1 т. 10 ЗЧРБ.
+  Текст закона читался в консолидации Ciela; ДВ с последней редакцией не открывался.
+applies_if:
+  op: and
+  all:
+    - {op: in, fact: self.citizenship_group, values: [third]}
+    - {op: not, cond: {op: in, fact: self.citizenship_group, values: [bg, eu]}}
+unsupported:
+  - cond:
+      op: and
+      all:
+        - {op: eq, fact: case.who_moves, value: already_in_bg}
+        - {op: in, fact: self.status_in_bg, values: [visa_d, long_term, permanent, protection]}
+    reason: "Продление или смена уже имеющегося статуса бот пока не проверяет — нужен индивидуальный разбор."
+summary: >-
+  Основание для тех, кто уже получил право на пенсию — в Болгарии, в стране гражданства или в другой стране —
+  и может обеспечить себя в Болгарии.
+requirements:
+  - id: has_pension
+    label: "Есть право на пенсию (в любой стране)"
+    cond: {op: in, fact: self.income_sources, values: [pension]}
+    kind: legal
+    stage: any
+    on_fail: not_eligible
+    fail_text: "Основание доступно только тем, кто уже получил право на пенсию."
+    source_ids: [zchrb]
+    verified: false
+    research_status: consolidated
+    research_note: "чл. 24 ал. 1 т. 10 ЗЧРБ: «са получили право на пенсия съгласно законодателството на Република България, държавата си на произход или друга държава»."
+  - id: pension_doc
+    label: "Есть документ компетентного органа о праве на пенсию"
+    cond: {op: known_true, fact: self.pension_doc}
+    kind: procedure
+    stage: permit
+    on_fail: possible_after
+    fail_text: "Нужно получить официальный документ о назначении пенсии, с переводом и легализацией (апостилем)."
+    unknown_text: "Уточните, можете ли получить документ о назначении пенсии."
+    source_ids: [ppzchrb]
+    verified: false
+    research_status: consolidated
+    research_note: "чл. 23 т. 1 ППЗЧРБ."
+  - id: means
+    label: "Средств хватает на жизнь в Болгарии (пенсия не ниже минимальной пенсии в Болгарии)"
+    cond: {op: cmp, fact: self.pension_amount_eur, cmp: ">=", param: min_pension_bg}
+    kind: legal
+    stage: any
+    on_fail: individual_review
+    fail_text: "Если пенсия ниже ориентира, нужны дополнительные доказательства средств — это оценивается индивидуально."
+    unknown_text: "Уточните размер пенсии."
+    source_ids: [zchrb]
+    verified: false
+    research_status: unconfirmed
+    research_note: >-
+      Закон (чл. 24 ал. 1 т. 10 и ал. 2): достаточные средства, не меньше МРЗ, минимальной стипендии или минимальной пенсии
+      на срок пребывания. Какой из ориентиров применяют к пенсионерам — не подтверждено официально. Минимальная пенсия
+      347,51 € — только СМИ/BGINFO. Ориентир BGINFO «12 минимальных пенсий ≈ 4200 €» в законе не найден.
+  - id: housing
+    label: "Есть подтверждённое жильё в Болгарии"
+    cond: {op: known_true, fact: case.has_housing}
+    kind: legal
+    stage: permit
+    on_fail: possible_after
+    fail_text: "Нужно оформить жильё: договор аренды или документ о собственности."
+    unknown_text: "Уточните, есть ли жильё в Болгарии."
+    source_ids: [ppzchrb]
+    verified: false
+    research_status: consolidated
+    research_note: "чл. 14 ал. 1 т. 3 ППЗЧРБ: «доказателства за осигурено жилище»."
+restrictions:
+  - text: "Сначала нужна виза D (оформляется в консульстве Болгарии), затем ВНЖ подаётся в Болгарии по тому же основанию."
+    kind: legal
+  - text: "ВНЖ выдаётся на срок до 1 года и продлевается; заявление на продление — не позднее чем за 14 дней до окончания срока."
+    kind: legal
+  - text: "Право на работу это основание само по себе не даёт: для работы нужен отдельный допуск."
+    kind: practice
+    scope: "по данным BGINFO, в законе отдельно не проверено"
+practice_notes:
+  - text: "Обычно требуют медицинскую страховку с минимальным покрытием, которое называет BGINFO."
+    scope: "по данным BGINFO; в ЗЧРБ/ППЗЧРБ сумма покрытия не найдена"
+    kind: practice
+documents:
+  - "Загранпаспорт"
+  - "Документ о праве на пенсию (с переводом и легализацией/апостилем)"
+  - "Справка болгарского банка о счёте, на который будет приходить пенсия"
+  - "Документ о жилье (аренда или собственность)"
+  - "Медицинская страховка"
+  - "Справка о несудимости (при первичной подаче)"
+steps:
+  - "Подготовить документ о пенсии, перевод и апостиль."
+  - "Открыть счёт в болгарском банке для пенсионных переводов."
+  - "Подать на визу D в консульстве Болгарии."
+  - "После въезда подать заявление на ВНЖ в дирекцию «Миграция» (решение — до 14 дней, может быть продлено на месяц)."
+family_note: "Супруг(а) и дети не получают ВНЖ автоматически — для них отдельная процедура как для членов семьи."
+goals: [live, long_term]
+bginfo_source_ids: [bg_pensioner]

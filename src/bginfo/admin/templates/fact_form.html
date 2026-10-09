@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors_box, select with context %}
+{% block title %}{{ 'Новый факт' if is_new else 'Факт ' ~ item.key }}{% endblock %}
+
+{% macro opt_row(i, o) %}
+{% set p = 'opt-' ~ i %}
+<div class="row-item">
+  <input type="hidden" name="opt_idx" value="{{ i }}">
+  <div class="grid">
+    <label>Значение (латиница) <input name="{{ p }}-value" value="{{ o.value }}"></label>
+    <label>Подпись <input name="{{ p }}-label" value="{{ o.label }}"></label>
+    <label class="wide">Вопрос для JEV: «Указано ли …?» <input name="{{ p }}-detect" value="{{ o.detect }}"></label>
+  </div>
+  <button type="button" class="link" data-remove>удалить вариант</button>
+</div>
+{% endmacro %}
+
+{% block content %}
+<h1>{{ 'Новый факт' if is_new else 'Факт: ' ~ item.label }}</h1>
+<p><a href="/facts">← к каталогу фактов</a></p>
+{{ errors_box(errors) }}
+{% if conflict %}<div class="alert warn"><a href="/facts/{{ item.key }}">Открыть актуальную версию</a></div>{% endif %}
+
+<form method="post" action="/facts/{{ '_new' if is_new else item.key }}" class="edit">
+  {{ csrf_field() }}
+  <input type="hidden" name="revision" value="{{ revision }}">
+  <fieldset>
+    <legend>Факт</legend>
+    <div class="grid">
+      <label>Ключ {% if is_new %}<input name="key" value="{{ item.key }}" required placeholder="например, has_housing">
+        {% else %}<input value="{{ item.key }}" readonly>{% endif %}</label>
+      <label class="wide">Название <input name="label" value="{{ item.label }}" required></label>
+      <label>Область {{ select('scope', CHOICES.scope, item.scope) }}</label>
+      <label>Тип {{ select('type', CHOICES.fact_type, item.type) }}</label>
+      <label>Подпись единицы (для сумм, например «€ в месяц») <input name="unit_label" value="{{ item.unit_label }}"></label>
+      <label class="check"><input type="checkbox" name="essential" {{ 'checked' if item.essential }}> обязательный для подбора</label>
+    </div>
+    <label>Для да/нет-фактов: вопрос для JEV («Указано ли, что …?») <input name="detect" value="{{ item.detect }}"></label>
+    <label>Зависит от фактов (при их изменении факт спрашивается заново; Ctrl+клик — несколько)
+      <select name="depends_on" multiple size="{{ [fact_list|length, 6] | min or 1 }}">
+        {% for f in fact_list if f.key != item.key %}<option value="{{ f.key }}" {{ 'selected' if f.key in item.depends_on }}>{{ f.label }} [{{ f.key }}]</option>{% endfor %}
+      </select>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Варианты (для «выбор одного» и «выбор нескольких»)</legend>
+    <div class="rows" id="rows-opt">
+      {% for o in item.options %}{{ opt_row(loop.index0, o) }}{% endfor %}
+    </div>
+    <button type="button" class="secondary" data-add data-template="tpl-opt" data-target="rows-opt">+ вариант</button>
+    <template id="tpl-opt">{{ opt_row('__I__', {'value': '', 'label': '', 'detect': ''}) }}</template>
+  </fieldset>
+  <div class="actions"><button type="submit">Сохранить в черновик</button></div>
+</form>
+
+{% if not is_new %}
+<form method="post" action="/facts/{{ item.key }}/delete" data-confirm="Удалить факт «{{ item.key }}» из черновика?" class="danger-zone">
+  {{ csrf_field() }}<input type="hidden" name="revision" value="{{ revision }}">
+  <button type="submit" class="danger">Удалить из черновика</button>
+</form>
+{% endif %}
+{% endblock %}

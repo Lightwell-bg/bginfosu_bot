@@ -1,0 +1,46 @@
+x-common: &common
+  build: .
+  image: bginfo-bot:latest
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    DB_PATH: /data/app.db
+    CONFIG_INI: /app/config.ini
+  volumes:
+    - bginfo_data:/data
+    - ./config.ini:/app/config.ini:ro
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  bot:
+    <<: *common
+    command: ["python", "-m", "bginfo.bot"]
+
+  admin:
+    <<: *common
+    command: ["python", "-m", "bginfo.admin"]
+    environment:
+      DB_PATH: /data/app.db
+      CONFIG_INI: /app/config.ini
+      ADMIN_HOST: 0.0.0.0
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  backup:
+    <<: *common
+    restart: "no"
+    profiles: ["ops"]
+    command: ["python", "-m", "bginfo.ops.backup", "backup", "--dir", "/data/backups"]
+
+volumes:
+  bginfo_data:

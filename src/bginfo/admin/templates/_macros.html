@@ -1,0 +1,138 @@
+{# Общие макросы форм. Импортируются «with context»: нужны csrf, fact_refs, params, sources. #}
+
+{% macro csrf_field() %}<input type="hidden" name="csrf_token" value="{{ csrf }}">{% endmacro %}
+
+{% macro errors_box(errors) %}
+{% if errors %}
+<div class="alert error" role="alert">
+  <strong>Не удалось сохранить:</strong>
+  <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro select(name, choices, value, empty=None) %}
+<select name="{{ name }}">
+  {% if empty is not none %}<option value="">{{ empty }}</option>{% endif %}
+  {% for k, v in choices.items() %}<option value="{{ k }}" {{ 'selected' if k == value }}>{{ v }}</option>{% endfor %}
+</select>
+{% endmacro %}
+
+{% macro research_select(name, value) %}
+<select name="{{ name }}">
+  {% for k, v in RESEARCH_STATUS_RU.items() %}<option value="{{ k }}" {{ 'selected' if k == (value or '') }}>{{ v }}</option>{% endfor %}
+</select>
+{% endmacro %}
+
+{# Мультиселект источников; выбранные ID, которых нет в каталоге, остаются в списке (не теряются молча). #}
+{% macro source_select(name, selected, only_kind=None) %}
+{% set pool = sources | selectattr('kind', 'equalto', only_kind) | list if only_kind else sources %}
+{% set known = pool | map(attribute='id') | list %}
+<select name="{{ name }}" multiple size="{{ [pool|length + 1, 6] | min }}">
+  {% for s in pool %}<option value="{{ s.id }}" {{ 'selected' if s.id in (selected or []) }}>{{ s.id }} — {{ s.title }}</option>{% endfor %}
+  {% for sid in (selected or []) if sid not in known %}<option value="{{ sid }}" selected>{{ sid }} (нет в каталоге)</option>{% endfor %}
+</select>
+{% endmacro %}
+
+{% macro leaf_row(prefix, lf) %}
+<div class="row-item leaf" data-type="{{ lf.type }}">
+  <input type="hidden" name="{{ prefix }}-lidx" value="{{ lf.i }}">
+  {% set p = prefix ~ '-l' ~ lf.i %}
+  <select name="{{ p }}-type" class="leaf-type" aria-label="Тип условия">
+    {% for k, v in LEAF_TYPES.items() %}<option value="{{ k }}" {{ 'selected' if k == lf.type }}>{{ v }}</option>{% endfor %}
+  </select>
+  <select name="{{ p }}-fact" class="fact-select" aria-label="Факт">
+    <option value="">— факт —</option>
+    {% set refs = fact_refs | map(attribute=0) | list %}
+    {% for ref, label in fact_refs %}<option value="{{ ref }}" {{ 'selected' if ref == lf.fact }}>{{ label }}</option>{% endfor %}
+    {% if lf.fact and lf.fact not in refs %}<option value="{{ lf.fact }}" selected>{{ lf.fact }} (нет в каталоге)</option>{% endif %}
+  </select>
+  <span class="f-cmp">
+    <select name="{{ p }}-cmp" aria-label="Оператор">
+      {% for op in ['>=', '>', '<=', '<', '=='] %}<option value="{{ op }}" {{ 'selected' if op == lf.cmp }}>{{ op }}</option>{% endfor %}
+    </select>
+  </span>
+  <input name="{{ p }}-value" value="{{ lf.value }}" class="f-value" placeholder="значение" aria-label="Значение">
+  <span class="f-param">
+    или показатель
+    <select name="{{ p }}-param" aria-label="Показатель">
+      <option value="">—</option>
+      {% for pr in params %}<option value="{{ pr.id }}" {{ 'selected' if pr.id == lf.param }}>{{ pr.label }} [{{ pr.id }}]</option>{% endfor %}
+    </select>
+    × <input name="{{ p }}-mult" value="{{ lf.mult }}" size="5" aria-label="Множитель">
+  </span>
+  <button type="button" class="link" data-remove>удалить</button>
+  <div class="fact-hint muted"></div>
+</div>
+{% endmacro %}
+
+{# Конструктор условия: простой — листы и/или, сложный — читаемый текст + JSON этого условия. #}
+{% macro cond_builder(prefix, cond, required=False) %}
+{% set c = cond_ctx(prefix, cond, required) %}
+<div class="cond">
+  {% if c.readable %}<p class="readable">{{ c.readable }}</p>{% endif %}
+  {% if c.mode == 'builder' %}
+    <input type="hidden" name="{{ prefix }}-mode" value="builder">
+    <label class="inline">Если условий несколько:
+      <select name="{{ prefix }}-combine">
+        <option value="and" {{ 'selected' if c.combine != 'or' }}>должны выполняться все (И)</option>
+        <option value="or" {{ 'selected' if c.combine == 'or' }}>достаточно любого (ИЛИ)</option>
+      </select>
+    </label>
+    <div class="rows" id="leaves-{{ prefix }}">
+      {% for lf in c.leaves %}{{ leaf_row(prefix, lf) }}{% endfor %}
+    </div>
+    <button type="button" class="secondary" data-add data-template="tpl-leaf" data-target="leaves-{{ prefix }}" data-prefix="{{ prefix }}">+ условие</button>
+    <details class="adv">
+      <summary>Расширенный режим (JSON этого условия)</summary>
+      <label class="inline"><input type="checkbox" name="{{ prefix }}-use_json"> применить JSON вместо конструктора</label>
+      <textarea name="{{ prefix }}-json" rows="6" spellcheck="false">{{ c.json_text }}</textarea>
+    </details>
+  {% else %}
+    <input type="hidden" name="{{ prefix }}-mode" value="json">
+    <p class="muted">Сложное условие (вложенные и/или/не либо «основание заявителя») правится только здесь, в расширенном режиме. Это JSON одного условия; {% if not required %}пусто — условия нет{% else %}пустым оставить нельзя{% endif %}.</p>
+    <textarea name="{{ prefix }}-json" rows="8" spellcheck="false">{{ c.json_text }}</textarea>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{# Шаблон строки конструктора для JS (<template> не исполняется и не отправляется). #}
+{% macro leaf_template() %}
+<template id="tpl-leaf">{{ leaf_row('__P__', {'i': '__I__', 'type': 'eq', 'fact': '', 'cmp': '>=', 'value': '', 'param': '', 'mult': '1'}) }}</template>
+<div id="fact-catalog" data-json='{{ fact_catalog | tojson }}' hidden></div>
+{% endmacro %}
+
+{% macro notes_block(name, items, title) %}
+<fieldset>
+  <legend>{{ title }}</legend>
+  <div class="rows" id="rows-{{ name }}">
+    {% for n in items %}{{ note_row(name, loop.index0, n) }}{% endfor %}
+  </div>
+  <button type="button" class="secondary" data-add data-template="tpl-{{ name }}" data-target="rows-{{ name }}">+ добавить</button>
+  <template id="tpl-{{ name }}">{{ note_row(name, '__I__', {'text': '', 'scope': '', 'kind': 'practice'}) }}</template>
+</fieldset>
+{% endmacro %}
+
+{% macro note_row(name, i, n) %}
+<div class="row-item">
+  <input type="hidden" name="{{ name }}_idx" value="{{ i }}">
+  <textarea name="{{ name }}-{{ i }}-text" rows="2" placeholder="Текст">{{ n.text }}</textarea>
+  <input name="{{ name }}-{{ i }}-scope" value="{{ n.scope }}" placeholder="Область (например, «для всех»)">
+  {{ select(name ~ '-' ~ i ~ '-kind', CHOICES.req_kind, n.kind) }}
+  <button type="button" class="link" data-remove>удалить</button>
+</div>
+{% endmacro %}
+
+{% macro param_hint() %}
+<details class="adv">
+  <summary>Подстановка значений: {param:ID} (показатели)</summary>
+  <p class="muted">В текстах можно писать <code>{param:ID}</code> — бот подставит действующее значение показателя на дату расчёта.</p>
+  <table class="compact">
+    {% for pr in params %}<tr><td><code>{{ '{param:' ~ pr.id ~ '}' }}</code></td><td>{{ pr.label }}</td></tr>{% else %}<tr><td class="muted">Показателей пока нет.</td></tr>{% endfor %}
+  </table>
+</details>
+{% endmacro %}
+
+{% macro dt_row(label, name, value) %}
+<label>{{ label }} <input type="date" name="{{ name }}" value="{{ value or '' }}"></label>
+{% endmacro %}

@@ -1,0 +1,28 @@
+{# Поэлементное сравнение выпусков: diff = результат diff_bundles. #}
+{% if not diff %}
+  <p class="muted">Различий нет.</p>
+{% else %}
+<table class="diff">
+  <thead><tr><th>Что</th><th>Изменение</th><th>Поле</th><th>Было</th><th>Стало</th></tr></thead>
+  <tbody>
+  {% for d in diff %}
+    {% if d.change == 'changed' %}
+      {% for f in d.fields %}
+      <tr>
+        {% if loop.first %}<td rowspan="{{ d.fields|length }}">{{ d.kind | kind_ru }} <code>{{ d.id }}</code></td><td rowspan="{{ d.fields|length }}">изменено</td>{% endif %}
+        <td>{{ f | field_ru }}</td>
+        <td class="old"><code class="val">{{ d.old[f] | fmt_val }}</code></td>
+        <td class="new"><code class="val">{{ d.new[f] | fmt_val }}</code></td>
+      </tr>
+      {% endfor %}
+    {% else %}
+      <tr>
+        <td>{{ d.kind | kind_ru }} <code>{{ d.id }}</code></td>
+        <td class="{{ 'new' if d.change == 'added' else 'old' }}">{{ 'добавлено' if d.change == 'added' else 'удалено' }}</td>
+        <td colspan="3" class="muted">{% if d.change == 'added' %}новый элемент{% else %}элемента больше нет{% endif %}</td>
+      </tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}

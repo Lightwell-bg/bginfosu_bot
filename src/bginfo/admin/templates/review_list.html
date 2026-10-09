@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Требует проверки{% endblock %}
+{% block content %}
+<h1>Пометить «требует проверки»</h1>
+<p class="muted">Срочная пометка в действующей базе (например, если закон изменился). Создаётся новый выпуск из ДЕЙСТВУЮЩЕГО выпуска, непроверенные правки черновика в него не попадут; пометка переносится и в черновик.</p>
+{% if not active %}
+  <p class="alert error">Действующего выпуска нет.</p>
+{% else %}
+<table>
+  <thead><tr><th>ID</th><th>Название</th><th>Статус в действующем выпуске</th><th></th></tr></thead>
+  <tbody>
+  {% for g in grounds %}
+    <tr><td><code>{{ g.id }}</code></td><td>{{ g.title }}</td><td>{{ g.status | ground_status }}</td>
+        <td><a href="/needs-review/{{ g.id }}">Пометить…</a></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

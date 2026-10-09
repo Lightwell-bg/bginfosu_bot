@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Админка{% endblock %} — BGINFO</title>
+  <link rel="stylesheet" href="/static/admin.css">
+  <script src="/static/admin.js" defer></script>
+</head>
+<body>
+{% if user %}
+<header class="top">
+  <a class="brand" href="/">BGINFO · база знаний</a>
+  <nav>
+    <a href="/">Главная</a>
+    <a href="/grounds">Основания</a>
+    <a href="/params">Показатели</a>
+    <a href="/facts">Факты</a>
+    <a href="/questions">Вопросы</a>
+    <a href="/sources">Источники</a>
+    <a href="/publish">Проверка и публикация</a>
+    <a href="/history">История</a>
+    <a href="/needs-review">Требует проверки</a>
+    <a href="/preview">Тестовая анкета</a>
+    <a href="/stats">Статистика</a>
+  </nav>
+  <form method="post" action="/logout" class="logout">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <span class="muted">{{ user }}</span> <button type="submit" class="link">Выйти</button>
+  </form>
+</header>
+{% endif %}
+<main>
+  {% for level, text in flashes %}<div class="alert {{ 'error' if level == 'error' else 'ok' }}">{{ text }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>
