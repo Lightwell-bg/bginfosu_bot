@@ -28,7 +28,8 @@ services:
       CONFIG_INI: /app/config.ini
       ADMIN_HOST: 0.0.0.0
     ports:
-      - "127.0.0.1:8080:8080"
+      # Порт на хосте задаётся ADMIN_PORT в .env (если 8080 занят другим сервисом)
+      - "127.0.0.1:${ADMIN_PORT:-8080}:8080"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3).status == 200 else 1)"]
       interval: 30s

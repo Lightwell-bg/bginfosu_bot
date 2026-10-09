@@ -118,6 +118,7 @@ OpenRouter serves both JEV (free-text parsing) and the generative model (amounts
    `[limits] unknown_cost_usd = 0.01` is the conservative cost estimate for an AI call when OpenRouter does not return `usage.cost`; it counts toward the daily budget and is reserved before the call.
 3. Put the key into `.env`: `OPENROUTER_API_KEY=...`.
 4. Without a key the bot works, but with buttons only: free text is not parsed and explanations use a template.
+5. To check what the process actually sees in `.env` (secret values are never printed): `python -m bginfo.ops.check_env` (in Docker: `docker compose run --rm admin python -m bginfo.ops.check_env`).
 
 Documentation: JEV - <https://openrouter.ai/docs/guides/community/jev>, System One request - <https://openrouter.ai/docs/api/api-reference/systemone/submit-a-system-one-request>.
 Models are set in `config.ini` (`[ai] jev_model`, `llm_model`), see [PROMPTS.md](PROMPTS.md).

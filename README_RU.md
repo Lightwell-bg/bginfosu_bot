@@ -118,6 +118,7 @@ Copy-Item .env.example .env
    `[limits] unknown_cost_usd = 0.01` — консервативная оценка стоимости AI-вызова, если OpenRouter не вернул `usage.cost`; она учитывается в дневном бюджете и резервируется перед вызовом.
 3. Вставьте ключ в `.env`: `OPENROUTER_API_KEY=...`.
 4. Без ключа бот работает, но только кнопками: свободный текст не разбирается, пояснения идут по шаблону.
+5. Проверить, что реально видит процесс в `.env` (значения секретов не печатаются): `python -m bginfo.ops.check_env` (в Docker: `docker compose run --rm admin python -m bginfo.ops.check_env`).
 
 Документация: JEV — <https://openrouter.ai/docs/guides/community/jev>, запрос System One — <https://openrouter.ai/docs/api/api-reference/systemone/submit-a-system-one-request>.
 Модели задаются в `config.ini` (`[ai] jev_model`, `llm_model`), см. [PROMPTS.md](PROMPTS.md).

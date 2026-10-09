@@ -83,7 +83,7 @@ docker compose run --rm admin python -c "import secrets; print(secrets.token_url
 docker compose restart bot admin
 ```
 
-**Адрес прослушивания админки в контейнере.** Для сервиса `admin` в `docker-compose.yml` задано `ADMIN_HOST=0.0.0.0`: эта переменная перекрывает `[admin] host` из `config.ini`, поэтому править `host` не нужно. Наружу порт открыт только на `127.0.0.1` сервера (`127.0.0.1:8080:8080`).
+**Адрес прослушивания админки в контейнере.** Для сервиса `admin` в `docker-compose.yml` задано `ADMIN_HOST=0.0.0.0`: эта переменная перекрывает `[admin] host` из `config.ini`, поэтому править `host` не нужно. Наружу порт открыт только на `127.0.0.1` сервера (`127.0.0.1:${ADMIN_PORT:-8080}:8080`). Если 8080 на сервере занят, задайте в `.env` свободный порт, например `ADMIN_PORT=8081`, и используйте его в SSH-туннеле и в `reverse_proxy` Caddy.
 
 ## 4. Сборка и запуск
 
@@ -113,7 +113,7 @@ docker compose run --rm bot python -m bginfo.seed seed-draft
 На **своём компьютере**:
 
 ```powershell
-ssh -L 8080:127.0.0.1:8080 user@server
+ssh -L 8080:127.0.0.1:8080 user@server   # если ADMIN_PORT=8081: ssh -L 8080:127.0.0.1:8081 user@server
 ```
 
 (`user@server` — ваша обычная строка входа на сервер по ключу.) Пока сессия открыта, админка доступна на <http://127.0.0.1:8080>. В `.env` на сервере при этом `ADMIN_COOKIE_SECURE=false` (трафик идёт внутри SSH); после изменения `.env` пересоздайте сервис: `docker compose up -d admin`.
