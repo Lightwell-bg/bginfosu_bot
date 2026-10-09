@@ -58,7 +58,7 @@ src/bginfo/
   admin/             FastAPI admin (routes, templates, static files)
   seed/              initial content (YAML), loader, demo database builder
   db/                SQLite connection and migrations
-  ops/               backup/restore, admin password hash
+  ops/               backup/restore, .env check
 scripts/             live OpenRouter checks (smoke_live.py, jev_eval.py)
 tests/               tests (pytest), JEV evaluation cases (tests/jev_eval/cases.yaml)
 docs/                documentation (see below)
@@ -123,19 +123,12 @@ OpenRouter serves both JEV (free-text parsing) and the generative model (amounts
 Documentation: JEV - <https://openrouter.ai/docs/guides/community/jev>, System One request - <https://openrouter.ai/docs/api/api-reference/systemone/submit-a-system-one-request>.
 Models are set in `config.ini` (`[ai] jev_model`, `llm_model`), see [PROMPTS.md](PROMPTS.md).
 
-### Admin: `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, `ADMIN_SESSION_SECRET`, `ADMIN_COOKIE_SECURE`
+### Admin: `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, `ADMIN_COOKIE_SECURE`
 
-The admin will not start without a password hash and a session secret (it reports what is missing).
+The admin will not start without a password and a session secret (it reports what is missing).
 
 - `ADMIN_USERNAME` - login (`admin` by default).
-- `ADMIN_PASSWORD_HASH` - argon2 hash of the password. To get it (password at least 10 characters):
-
-  ```powershell
-  python -m bginfo.ops.hash_password
-  ```
-
-  The script asks for the password twice and prints a string like `$argon2id$v=19$...`. Paste it whole into `.env` **in single quotes**:
-  `ADMIN_PASSWORD_HASH='$argon2id$v=19$...'`. The quotes are needed because Docker Compose, when reading `env_file`, would otherwise treat `$...` as variables and corrupt the hash.
+- `ADMIN_PASSWORD` - the admin login password (any, but not empty). Write it plainly: `ADMIN_PASSWORD=your_password`. The admin hashes it (argon2) in memory at startup; there is no separate hash command.
 - `ADMIN_SESSION_SECRET` - a random string of at least 32 characters used to sign sessions:
 
   ```powershell

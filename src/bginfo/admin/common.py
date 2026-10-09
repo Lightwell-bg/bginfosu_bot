@@ -90,6 +90,7 @@ class AdminState:
     db_path: str
     env: jinja2.Environment
     tz: ZoneInfo
+    password_hash: str = ""  # argon2-хеш ADMIN_PASSWORD, считается при старте
 
 
 def get_state(request: Request) -> AdminState:

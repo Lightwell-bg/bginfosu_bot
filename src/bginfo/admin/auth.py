@@ -42,11 +42,10 @@ class PostCtx:
 
 
 def check_settings(settings: Settings) -> None:
-    """Админка не стартует без хеша пароля и секрета сессии."""
+    """Админка не стартует без пароля и секрета сессии."""
     problems = []
-    if not settings.ADMIN_PASSWORD_HASH:
-        problems.append("не задан ADMIN_PASSWORD_HASH (получить: python -m bginfo.ops.hash_password, "
-                        "результат записать в .env)")
+    if not (settings.ADMIN_PASSWORD and settings.ADMIN_PASSWORD.get_secret_value()):
+        problems.append("Задайте ADMIN_PASSWORD в .env")
     secret = settings.ADMIN_SESSION_SECRET.get_secret_value() if settings.ADMIN_SESSION_SECRET else ""
     if len(secret) < MIN_SECRET_LEN:
         problems.append(f"ADMIN_SESSION_SECRET не задан или короче {MIN_SECRET_LEN} символов "
@@ -55,6 +54,11 @@ def check_settings(settings: Settings) -> None:
         problems.append("не задан ADMIN_USERNAME")
     if problems:
         raise AdminConfigError("Админка не запущена: " + "; ".join(problems) + ".")
+
+
+def hash_password(settings: Settings) -> str:
+    """Argon2-хеш ADMIN_PASSWORD (после check_settings); считается один раз при старте."""
+    return _hasher.hash(settings.ADMIN_PASSWORD.get_secret_value())
 
 
 def secret_key(settings: Settings) -> str:
@@ -71,11 +75,11 @@ def client_ip(request: Request, trust_proxy: bool) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def verify_credentials(settings: Settings, username: str, password: str) -> bool:
+def verify_credentials(settings: Settings, password_hash: str, username: str, password: str) -> bool:
     """Логин и пароль проверяются всегда оба, чтобы время ответа не выдавало верный логин."""
     user_ok = hmac.compare_digest(username.encode(), settings.ADMIN_USERNAME.encode())
     try:
-        pw_ok = _hasher.verify(settings.ADMIN_PASSWORD_HASH, password)
+        pw_ok = _hasher.verify(password_hash, password)
     except (VerificationError, InvalidHashError):
         pw_ok = False
     except Exception:
@@ -156,7 +160,7 @@ def login_submit(request: Request, form: FormData = Depends(csrf_form), conn: sq
                       error=f"Слишком много неудачных попыток входа. Повторите через {cfg.login_window_min} мин.")
     username = str(form.get("username", ""))
     password = str(form.get("password", ""))
-    ok = verify_credentials(st.settings, username, password)
+    ok = verify_credentials(st.settings, st.password_hash, username, password)
     record_attempt(conn, ip, ok)
     if not ok:
         log.warning("admin login failed from %s", ip)

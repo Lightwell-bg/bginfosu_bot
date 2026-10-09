@@ -43,14 +43,10 @@ def run_checks() -> tuple[list[str], bool]:
 
     lines.append(_line("ADMIN_USERNAME", s.ADMIN_USERNAME))
 
-    h = s.ADMIN_PASSWORD_HASH
-    if h.startswith("$argon2id$") and h.count("$") == 5:
-        lines.append(_line("ADMIN_PASSWORD_HASH", "OK"))
+    if s.ADMIN_PASSWORD and s.ADMIN_PASSWORD.get_secret_value():
+        lines.append(_line("ADMIN_PASSWORD", "задан"))
     else:
-        lines.append(_line(
-            "ADMIN_PASSWORD_HASH",
-            "ИСПОРЧЕН или пуст — проверьте одинарные кавычки; если не помогает, удвойте каждый $ ($$)",
-        ))
+        lines.append(_line("ADMIN_PASSWORD", "ПУСТО (обязательно)"))
         ok = False
 
     secret = s.ADMIN_SESSION_SECRET.get_secret_value() if s.ADMIN_SESSION_SECRET else ""

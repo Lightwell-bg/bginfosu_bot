@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: SecretStr | None = None
     OPENROUTER_API_KEY: SecretStr | None = None
     ADMIN_USERNAME: str = "admin"
-    ADMIN_PASSWORD_HASH: str = ""
+    ADMIN_PASSWORD: SecretStr | None = None
     ADMIN_SESSION_SECRET: SecretStr | None = None
     CONSULT_CHAT_ID: int | None = None
     DB_PATH: str = "data/app.db"

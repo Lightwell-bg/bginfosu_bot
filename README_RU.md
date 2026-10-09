@@ -58,7 +58,7 @@ src/bginfo/
   admin/             FastAPI-админка (маршруты, шаблоны, статика)
   seed/              начальное наполнение (YAML), загрузка, сборка демо-базы
   db/                подключение SQLite и миграции
-  ops/               бэкап/восстановление, хеш пароля админки
+  ops/               бэкап/восстановление, проверка .env
 scripts/             живые проверки OpenRouter (smoke_live.py, jev_eval.py)
 tests/               тесты (pytest), набор примеров для оценки JEV (tests/jev_eval/cases.yaml)
 docs/                документация (см. ниже)
@@ -123,19 +123,12 @@ Copy-Item .env.example .env
 Документация: JEV — <https://openrouter.ai/docs/guides/community/jev>, запрос System One — <https://openrouter.ai/docs/api/api-reference/systemone/submit-a-system-one-request>.
 Модели задаются в `config.ini` (`[ai] jev_model`, `llm_model`), см. [PROMPTS.md](PROMPTS.md).
 
-### Админка: `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, `ADMIN_SESSION_SECRET`, `ADMIN_COOKIE_SECURE`
+### Админка: `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, `ADMIN_COOKIE_SECURE`
 
-Без хеша пароля и секрета сессии админка не запустится (сообщит, чего не хватает).
+Без пароля и секрета сессии админка не запустится (сообщит, чего не хватает).
 
 - `ADMIN_USERNAME` — логин (по умолчанию `admin`).
-- `ADMIN_PASSWORD_HASH` — argon2-хеш пароля. Получить (пароль не короче 10 символов):
-
-  ```powershell
-  python -m bginfo.ops.hash_password
-  ```
-
-  Скрипт дважды спросит пароль и напечатает строку вида `$argon2id$v=19$...`. Целиком вставьте её в `.env` **в одинарных кавычках**:
-  `ADMIN_PASSWORD_HASH='$argon2id$v=19$...'`. Кавычки нужны, потому что Docker Compose при чтении `env_file` иначе принимает `$...` за переменные и портит хеш.
+- `ADMIN_PASSWORD` — пароль входа в админку (любой, но не пустой). Пишется как есть: `ADMIN_PASSWORD=ваш_пароль`. Админка сама хеширует его (argon2) в памяти при запуске; отдельной команды нет.
 - `ADMIN_SESSION_SECRET` — случайная строка не короче 32 символов для подписи сессий:
 
   ```powershell

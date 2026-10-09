@@ -8,28 +8,9 @@
 
 Все команды ниже выполняются на сервере по SSH с вашим пользователем (вход по ключу), если не сказано иное.
 
-## 1. Установка Docker (официальный репозиторий)
+## 1. Docker
 
-По инструкции <https://docs.docker.com/engine/install/ubuntu/>:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-sudo systemctl enable --now docker
-sudo usermod -aG docker "$USER"
-```
-
-Выйдите и войдите по SSH снова (чтобы группа `docker` применилась), затем проверьте:
-
-```bash
-docker --version && docker compose version && docker run --rm hello-world
-```
+Docker и Docker Compose на сервере уже установлены — ничего устанавливать не нужно.
 
 ## 2. Каталог и код
 
@@ -65,15 +46,14 @@ nano .env
 
 - `TELEGRAM_BOT_TOKEN` — токен бота. Боевой токен ставьте только на этапе переключения.
 - `OPENROUTER_API_KEY` — ключ OpenRouter.
-- `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` (в одинарных кавычках: `ADMIN_PASSWORD_HASH='$argon2id$...'`), `ADMIN_SESSION_SECRET` (от 32 символов).
+- `ADMIN_USERNAME`, `ADMIN_PASSWORD` (пароль входа в админку, любой не пустой; админка сама хеширует его при запуске), `ADMIN_SESSION_SECRET` (от 32 символов).
 - `CONSULT_CHAT_ID` — по желанию.
 - `APP_MODE=production`. `DB_PATH` в Docker не имеет значения: `docker-compose.yml` задаёт `/data/app.db`.
 - `ADMIN_COOKIE_SECURE`: `false` при доступе через SSH-туннель (раздел 6), `true` при доступе по HTTPS через Caddy (раздел 7).
 
-Хеш пароля и секрет можно сгенерировать на сервере после первой сборки образа:
+Секрет сессии можно сгенерировать на сервере после первой сборки образа:
 
 ```bash
-docker compose run --rm admin python -m bginfo.ops.hash_password
 docker compose run --rm admin python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 

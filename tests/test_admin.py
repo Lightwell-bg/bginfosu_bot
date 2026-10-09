@@ -10,7 +10,6 @@ from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
-from argon2 import PasswordHasher
 from fastapi.testclient import TestClient
 
 from bginfo.admin.app import create_app
@@ -21,7 +20,6 @@ from bginfo.kb import releases as R
 from tests.kbfixture import mini_bundle
 
 PASSWORD = "correct horse battery staple"
-HASH = PasswordHasher(time_cost=1, memory_cost=8, parallelism=1).hash(PASSWORD)
 SOFIA = ZoneInfo("Europe/Sofia")
 
 
@@ -109,7 +107,7 @@ def setv(data: dict, name: str, *values: str) -> None:
 def make_ctx(tmp_path, *, trust_proxy=False, mode="test", max_attempts=3, bundle=None):
     R._cache.clear()
     db = tmp_path / "admin.db"
-    settings = Settings(_env_file=None, ADMIN_USERNAME="boss", ADMIN_PASSWORD_HASH=HASH,
+    settings = Settings(_env_file=None, ADMIN_USERNAME="boss", ADMIN_PASSWORD=PASSWORD,
                         ADMIN_SESSION_SECRET="s" * 48, ADMIN_COOKIE_SECURE=False, APP_MODE=mode, DB_PATH=str(db))
     config = AppConfig()
     config.admin.login_max_attempts = max_attempts
@@ -231,10 +229,23 @@ def test_no_inline_scripts(ctx):
     assert ctx.client.get("/static/admin.js").status_code == 200
 
 
-def test_startup_requires_hash_and_secret():
+def test_startup_requires_password_and_secret():
     with pytest.raises(AdminConfigError) as e:
-        create_app(Settings(_env_file=None, ADMIN_PASSWORD_HASH="", ADMIN_SESSION_SECRET="short"), AppConfig())
-    assert "ADMIN_PASSWORD_HASH" in str(e.value) and "ADMIN_SESSION_SECRET" in str(e.value)
+        create_app(Settings(_env_file=None, ADMIN_PASSWORD="", ADMIN_SESSION_SECRET="short"), AppConfig())
+    assert "ADMIN_PASSWORD" in str(e.value) and "ADMIN_SESSION_SECRET" in str(e.value)
+
+
+def test_startup_fails_without_password(tmp_path):
+    settings = Settings(_env_file=None, ADMIN_SESSION_SECRET="s" * 48, DB_PATH=str(tmp_path / "a.db"))
+    with pytest.raises(AdminConfigError, match="Задайте ADMIN_PASSWORD"):
+        create_app(settings, AppConfig())
+
+
+def test_password_hashed_in_memory_not_stored_plain(anon):
+    st = anon.app.state.admin
+    assert st.password_hash.startswith("$argon2")
+    assert st.settings.ADMIN_PASSWORD is None
+    assert PASSWORD not in repr(st.password_hash)
 
 
 # --------------------------------------------------------------------------- редактирование

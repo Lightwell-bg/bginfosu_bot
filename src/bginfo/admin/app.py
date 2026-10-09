@@ -30,7 +30,7 @@ CSP = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 
 
 
 def create_app(settings: Settings | None = None, config: AppConfig | None = None) -> FastAPI:
-    """Создать приложение. Без хеша пароля и секрета сессии — AdminConfigError."""
+    """Создать приложение. Без пароля и секрета сессии — AdminConfigError."""
     settings = settings or get_settings()
     config = config or get_config()
     auth.check_settings(settings)
@@ -41,7 +41,10 @@ def create_app(settings: Settings | None = None, config: AppConfig | None = None
 
     open_db(settings.DB_PATH).close()  # создать файл и применить миграции
     app = FastAPI(title="BGINFO admin", docs_url=None, redoc_url=None, openapi_url=None)
-    app.state.admin = AdminState(settings, config, settings.DB_PATH, make_env(tz), tz)
+    password_hash = auth.hash_password(settings)
+    # открытый пароль в состоянии не храним: только хеш и копия настроек без пароля
+    settings = settings.model_copy(update={"ADMIN_PASSWORD": None})
+    app.state.admin = AdminState(settings, config, settings.DB_PATH, make_env(tz), tz, password_hash)
 
     app.add_middleware(
         SessionMiddleware, secret_key=auth.secret_key(settings), session_cookie="bginfo_admin",
