@@ -192,6 +192,8 @@ Telegram эти скрипты не используют. Последний р�
 
 ## Развёртывание
 
+Репозиторий: https://github.com/Lightwell-bg/bginfosu_bot. Клонирование: `git clone https://github.com/Lightwell-bg/bginfosu_bot.git`
+
 VPS Ubuntu + Docker Compose: [docs/DEPLOY.md](docs/DEPLOY.md). `config.ini` подключён к контейнерам томом, его правка требует только перезапуска. Docker-образ и compose-файл на машине разработки не проверялись (см. [docs/PROGRESS.md](docs/PROGRESS.md)).
 
 ## Документация

@@ -192,6 +192,8 @@ These scripts do not use Telegram. The latest evaluation result is in [docs/JEV_
 
 ## Deployment
 
+Repository: https://github.com/Lightwell-bg/bginfosu_bot. Clone: `git clone https://github.com/Lightwell-bg/bginfosu_bot.git`
+
 Ubuntu VPS + Docker Compose: [docs/DEPLOY.md](docs/DEPLOY.md). `config.ini` is mounted into the containers as a volume, so editing it only needs a container restart. The Docker image and compose file have not been verified on the development machine (see [docs/PROGRESS.md](docs/PROGRESS.md)).
 
 ## Documentation

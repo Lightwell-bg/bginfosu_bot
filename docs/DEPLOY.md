@@ -39,10 +39,10 @@ sudo chown "$USER":"$USER" /opt/bginfo-bot
 cd /opt/bginfo-bot
 ```
 
-Получите код. В репозитории пока нет remote, адрес репозитория задаёт владелец (это единственное место, куда подставляется его URL):
+Получите код из GitHub (репозиторий публичный, ключ доступа не нужен):
 
 ```bash
-git clone АДРЕС_РЕПОЗИТОРИЯ_ОТ_ВЛАДЕЛЬЦА .
+git clone https://github.com/Lightwell-bg/bginfosu_bot.git .
 git log --oneline -1
 ```
 
