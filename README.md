@@ -168,6 +168,8 @@ The `build-demo` command refuses to write to the database equal to `DB_PATH`. To
 
 The admin menu item **Statistics** (`/stats`) shows, for the last 7 / 30 / 90 days or all time: new users, started and finished questionnaires, consultation requests, bot errors, AI spend, daily activity, where people drop out of the questionnaire, outcomes, how often each ground was checked first, breakdowns by user traits, and the most typical situations (click one to see its individual results). The data is anonymised: only categories (such as "other country, pension") are stored, with no names, amounts, free text or Telegram IDs, so it is kept after a user deletes their data.
 
+The **Launches** page (`/stats/launches`, button at the top of Statistics) lists who started the bot and when, with name and Telegram link, questionnaire state and the ground picked (paged, 50 per page).
+
 ## Tests and checks
 
 ```powershell

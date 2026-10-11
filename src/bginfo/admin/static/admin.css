@@ -81,6 +81,10 @@ nav a.on, p a.on { font-weight:700; }
 .badge.ok { background:#dff3e4; color:#17692e; border-color:#b7dfc1; }
 .badge.warn { background:#fff0c2; color:#7a5800; border-color:#ecd48a; }
 .badge.gray { background:#e8eaef; color:#4a5163; border-color:#d0d4de; }
+.badge.info { background:#dcebfb; color:#14508f; border-color:#a9c9ee; }
+.big-link { font-size:1.15em; padding:12px 22px; }
+.pager { display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin:14px 0; }
+.button.disabled { opacity:.45; cursor:default; pointer-events:none; }
 .badge.bad { background:#fde0e0; color:#9a1b1b; border-color:#e8a9a9; }
 .status-box { border-radius:10px; padding:14px 20px; margin:0 0 16px; border:2px solid var(--line); background:#fff; }
 .status-box.ok { background:var(--ok); border-color:#b7dfc1; }

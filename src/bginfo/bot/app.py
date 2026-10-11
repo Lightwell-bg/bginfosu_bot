@@ -193,12 +193,13 @@ class BotApp:
             await self.run(c.from_user, Event("button", action=action, arg=arg), callback=c, ref=(sid, rev))
 
     # ------------------------------------------------------------------ DB steps (executor)
-    def _load(self, uid: int, ref: tuple[int, int] | None, fresh: bool, create: bool):
+    def _load(self, uid: int, ref: tuple[int, int] | None, fresh: bool, create: bool,
+              user_names: tuple = (None, None, None)):
         """(session, user_ctx_flag, snapshot, status, is_new). status: ok | stale.
 
         Новая сессия здесь только «временная» (``repo.blank_session``): в БД её вставит ``commit_step``.
         """
-        u = repo.touch_user(self.conn, uid)
+        u = repo.touch_user(self.conn, uid, *user_names)
         s = repo.active_session(self.conn, uid)
         is_new = False
         if ref is not None:
@@ -228,7 +229,8 @@ class BotApp:
         chat_id = uid  # бот работает только в личных чатах
         async with self.user_lock(uid):
             try:
-                await self._run_locked(uid, tg_user.username, chat_id, ev, message, callback, ref, fresh)
+                names = (tg_user.username, getattr(tg_user, "first_name", None), getattr(tg_user, "last_name", None))
+                await self._run_locked(uid, tg_user.username, chat_id, ev, message, callback, ref, fresh, names)
             except Exception as e:  # noqa: BLE001
                 # только тип и стек: текст исключения может содержать данные пользователя или провайдера
                 log.error("handler error: %s", safe_exc(e))
@@ -242,7 +244,8 @@ class BotApp:
                 with contextlib.suppress(Exception):
                     await self._answer(callback, None)
 
-    async def _run_locked(self, uid, username, chat_id, ev, message, callback, ref, fresh) -> None:
+    async def _run_locked(self, uid, username, chat_id, ev, message, callback, ref, fresh,
+                          names: tuple = (None, None, None)) -> None:
         """Один шаг диалога.
 
         Порядок: загрузка (SELECT; заодно touch_user/new_session) -> ``dialog.handle`` (в памяти, без
@@ -259,14 +262,14 @@ class BotApp:
         step = _STEP.get()
         update_id = step["id"] if step is not None else None
         create = callback is None
-        s, u, snap, status, is_new = await self.db(self._load, uid, ref, fresh, create)
+        s, u, snap, status, is_new = await self.db(self._load, uid, ref, fresh, create, names)
         if status == "stale":
             # Алерт + актуальный шаг обычным шагом (resume_view), чтобы у пользователя остались живые кнопки,
             # даже если ответ на прежнее сообщение не дошёл. Старое сообщение не правим (callback=None).
             await self._answer(callback, TXT_STALE, alert=True)
             callback = None
             ev = Event("button", action="resume_view")
-            s, u, snap, status, is_new = await self.db(self._load, uid, None, False, False)
+            s, u, snap, status, is_new = await self.db(self._load, uid, None, False, False, names)
             if s is None:
                 await self.bot.send_message(chat_id, TXT_NO_SESSION)
                 return

@@ -4,6 +4,7 @@
 {% macro bar(w) %}<span class="bar"><span class="bar-fill {{ w }}"></span></span>{% endmacro %}
 {% macro empty() %}<p class="muted">За этот период данных нет.</p>{% endmacro %}
 <h1>Статистика</h1>
+<p><a class="button big-link" href="/stats/launches?period={{ period }}">Запуски бота (кто и что подобрано)</a></p>
 <p class="period-switch">
   {% for p, label in periods %}<a class="button{{ '' if p == period else ' secondary' }}" href="/stats?period={{ p }}">{{ label }}</a>{% endfor %}
 </p>

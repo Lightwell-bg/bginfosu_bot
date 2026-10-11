@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import sqlite3
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Request
@@ -13,8 +14,9 @@ from fastapi import APIRouter, Depends, Request
 from bginfo.admin.auth import current_user
 from bginfo.admin.common import get_conn, get_state, render
 from bginfo.db.conn import utcnow
-from bginfo.kb.releases import active_snapshot, load_draft
+from bginfo.kb.releases import active_snapshot, load_draft, load_release
 from bginfo.stats import queries as Q
+from bginfo.stats.launches import launches
 
 router = APIRouter()
 
@@ -187,6 +189,88 @@ def stats(request: Request, period: str | None = None, user: str = Depends(curre
                   drop=drop, in_progress=dropoff["in_progress"], recalc=ov["recalculations"],
                   history_from=_ru_date(first_day) if first_day else None, kinds=kinds, grounds=grounds, dims=dims, sits=sits, audit=audit,
                   status_legend=[STATUS_RU[s] for s in STATUS_ORDER])
+
+
+STATE_RU = {"result": ("есть результат", "ok"), "in_progress": ("заполняет", "info"), "abandoned": ("брошена", "gray")}
+LAUNCH_KIND_RU = {"none": "ничего не подошло", "unsupported": "особый режим", "individual": "индивидуальный разбор",
+                  "clarify": "не хватило данных"}
+USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,64}$")
+LAUNCHES_PER_PAGE = 50
+
+
+def _local(value: str | None, tz) -> str:
+    """UTC iso -> DD.MM.YYYY HH:MM в часовом поясе бота; пусто -> «—»."""
+    if not value:
+        return "—"
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).astimezone(tz).strftime("%d.%m.%Y %H:%M")
+    except ValueError:
+        return str(value)
+
+
+def _ground_title(conn: sqlite3.Connection, release_id, gid: str, names: _Names, cache: dict) -> str:
+    """Название основания по версии базы результата; нет выпуска/основания -> текущее название, иначе id.
+
+    cache — словарь release_id -> {ground_id: title} (или None) на время одного запроса."""
+    if release_id is not None:
+        if release_id not in cache:
+            try:
+                cache[release_id] = {g.id: g.title for g in load_release(conn, release_id).grounds}
+            except Exception:  # noqa: BLE001 - выпуска нет или он не читается — подпись не должна ломать страницу
+                cache[release_id] = None
+        titles = cache[release_id]
+        if titles and gid in titles:
+            return titles[gid]
+    return names.ground(gid)
+
+
+def launch_picked(conn: sqlite3.Connection, r: dict, names: _Names, cache: dict) -> dict | None:
+    """Колонка «Подобрано» одной строки отчёта о запусках."""
+    if r["primary_ground"]:
+        s_label, s_cls = STATUS_RU.get(r["primary_status"] or "", ("", ""))
+        return {"title": _ground_title(conn, r["release_id"], r["primary_ground"], names, cache),
+                "status": s_label, "cls": s_cls, "missing": False}
+    if r["result_kind"]:
+        return {"title": LAUNCH_KIND_RU.get(r["result_kind"], KIND_RU.get(r["result_kind"], r["result_kind"])),
+                "status": "", "cls": "", "missing": False}
+    if r["state"] == "result" and r.get("details_source") == "missing":
+        return {"title": "детали старого результата недоступны", "status": "", "cls": "", "missing": True}
+    return None
+
+
+@router.get("/stats/launches")
+def stats_launches(request: Request, page: str | None = None, period: str | None = None,
+                   user: str = Depends(current_user), conn: sqlite3.Connection = Depends(get_conn)):
+    period = _period(period)
+    try:
+        page_n = int(page) if page is not None else 1
+    except ValueError:
+        page_n = 1
+    st = get_state(request)
+    data = launches(conn, page_n, LAUNCHES_PER_PAGE, _since(period))
+    names = _Names(conn)
+    releases: dict = {}
+    rows = []
+    for r in data["rows"]:
+        name = " ".join(x for x in (r["first_name"], r["last_name"]) if x) or "без имени"
+        uname = r["username"]
+        label, cls = STATE_RU.get(r["state"], (r["state"], "gray"))
+        picked = launch_picked(conn, r, names, releases)
+        rows.append({
+            "when": _local(r["started_at"], st.tz), "name": name, "username": uname,
+            "link": f"https://t.me/{uname}" if uname and USERNAME_RE.match(uname) else None,
+            "tg_user_id": r["tg_user_id"], "state_label": label, "state_cls": cls, "picked": picked,
+            "results_count": r["results_count"], "last_result": _local(r["last_result_at"], st.tz),
+        })
+    p, pages = data["page"], data["pages"]
+
+    def url(n: int) -> str:
+        return f"/stats/launches?page={n}&period={period}"
+
+    return render(request, "stats_launches.html", periods=PERIODS, period=period, rows=rows, total=data["total"],
+                  page=p, pages=pages, first_url=url(1) if p > 1 else None, prev_url=url(p - 1) if p > 1 else None,
+                  next_url=url(p + 1) if p < pages else None, last_url=url(pages) if p < pages else None,
+                  retention_days=st.config.privacy.retention_days)
 
 
 @router.get("/stats/situation")

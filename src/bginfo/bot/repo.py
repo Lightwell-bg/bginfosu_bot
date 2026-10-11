@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import timedelta
 
@@ -44,12 +45,35 @@ def mark_update(conn: sqlite3.Connection, update_id: int) -> bool:
 # --------------------------------------------------------------------------- users
 
 
-def touch_user(conn: sqlite3.Connection, tg_user_id: int) -> dict:
+_USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,64}$")
+
+
+def _clean_username(username: str | None) -> str | None:
+    """Username без «@»; None, если не соответствует формату Telegram."""
+    if not username:
+        return None
+    u = username.strip().lstrip("@")[:64]
+    return u if _USERNAME_RE.match(u) else None
+
+
+def _clean_name(name: str | None) -> str | None:
+    name = (name or "").strip()[:128]
+    return name or None
+
+
+def touch_user(conn: sqlite3.Connection, tg_user_id: int, username: str | None = None,
+               first_name: str | None = None, last_name: str | None = None) -> dict:
+    """Создать/обновить пользователя; имя и username из Telegram обновляются при каждом вызове."""
     now = _now()
+    username, first_name, last_name = _clean_username(username), _clean_name(first_name), _clean_name(last_name)
     with write_tx(conn):
         conn.execute("INSERT OR IGNORE INTO users(tg_user_id, created_at, last_seen_at) VALUES (?,?,?)",
                      (tg_user_id, now, now))
         conn.execute("UPDATE users SET last_seen_at=? WHERE tg_user_id=?", (now, tg_user_id))
+        conn.execute(
+            "UPDATE users SET username=?, first_name=?, last_name=? WHERE tg_user_id=? AND "
+            "(username IS NOT ? OR first_name IS NOT ? OR last_name IS NOT ?)",
+            (username, first_name, last_name, tg_user_id, username, first_name, last_name))
         row = conn.execute("SELECT ai_notice_at FROM users WHERE tg_user_id=?", (tg_user_id,)).fetchone()
     return {"ai_notice_shown": row["ai_notice_at"] is not None}
 
@@ -168,11 +192,12 @@ def _stats_day(record: dict) -> str:
 
 def add_result_in_tx(conn: sqlite3.Connection, session_id: int, record: dict) -> None:
     conn.execute(
-        "INSERT INTO results(session_id, release_id, as_of, evaluation, message_html, explain_source, created_at)"
-        " VALUES (?,?,?,?,?,?,?)",
+        "INSERT INTO results(session_id, release_id, as_of, evaluation, message_html, explain_source, created_at,"
+        " result_kind, primary_ground, primary_status) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (session_id, record["release_id"], record["as_of"],
          json.dumps(record["evaluation"], ensure_ascii=False), record["message_html"],
-         record["explain_source"], _now()),
+         record["explain_source"], _now(),
+         record.get("result_kind"), record.get("primary_ground"), record.get("primary_status")),
     )
     # обезличенная статистика: без id пользователя и сессии, только дата (без времени), не чистится при /delete
     conn.execute(

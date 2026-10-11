@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Запуски бота{% endblock %}
+{% block content %}
+<h1>Запуски бота</h1>
+<p><a href="/stats?period={{ period }}">← вся статистика</a></p>
+<p class="period-switch">
+  {% for p, label in periods %}<a class="button{{ '' if p == period else ' secondary' }}" href="/stats/launches?period={{ p }}">{{ label }}</a>{% endfor %}
+</p>
+<p class="hint">Кто и когда запускал бота и что ему подобрано. Анкеты хранятся {{ retention_days }} дней (срок из config [privacy] retention_days), удалённые пользователем через /delete здесь не видны.</p>
+<p>Всего запусков: <b>{{ total }}</b></p>
+{% macro pager() %}
+<p class="pager">
+  {% if first_url %}<a href="{{ first_url }}">«&nbsp;Первая</a>{% else %}<span class="muted">«&nbsp;Первая</span>{% endif %}
+  {% if prev_url %}<a class="button secondary" href="{{ prev_url }}">← Назад</a>{% else %}<span class="button secondary disabled">← Назад</span>{% endif %}
+  <span>Страница {{ page }} из {{ pages }}</span>
+  {% if next_url %}<a class="button secondary" href="{{ next_url }}">Вперёд →</a>{% else %}<span class="button secondary disabled">Вперёд →</span>{% endif %}
+  {% if last_url %}<a href="{{ last_url }}">Последняя&nbsp;»</a>{% else %}<span class="muted">Последняя&nbsp;»</span>{% endif %}
+</p>
+{% endmacro %}
+{% if rows %}
+<table>
+  <thead><tr><th>Когда</th><th>Кто</th><th>Анкета</th><th>Подобрано</th><th>Результатов</th><th>Последний результат</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td>{{ r.when }}</td>
+      <td>{{ r.name }}<br>
+        {% if r.username %}{% if r.link %}<a href="{{ r.link }}" target="_blank" rel="noopener">@{{ r.username }}</a>{% else %}@{{ r.username }}{% endif %}{% else %}<span class="muted">без username</span>{% endif %}
+        <br><span class="muted small">id {{ r.tg_user_id }}</span></td>
+      <td><span class="badge {{ r.state_cls }}">{{ r.state_label }}</span></td>
+      <td>{% if r.picked and r.picked.missing %}<span class="muted">{{ r.picked.title }}</span>{% elif r.picked %}{{ r.picked.title }}{% if r.picked.status %} <span class="chip-st {{ r.picked.cls }}">{{ r.picked.status }}</span>{% endif %}{% else %}—{% endif %}</td>
+      <td>{{ r.results_count }}</td>
+      <td>{{ r.last_result }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{{ pager() }}
+{% else %}
+<p class="muted">За этот период запусков нет</p>
+{% endif %}
+{% endblock %}

@@ -72,7 +72,7 @@ def test_migration_applies_on_existing_001(tmp_path):
     for st in _split_sql(sql):
         conn.execute(st)
     conn.execute("INSERT INTO schema_migrations VALUES ('001_init.sql', 'x')")
-    assert migrate(conn) == ["002_stats.sql"]
+    assert migrate(conn) == ["002_stats.sql", "003_launches.sql"]
     assert conn.execute("SELECT COUNT(*) FROM stats_results").fetchone()[0] == 0
 
 
@@ -327,6 +327,6 @@ def test_migrate_second_connection_with_stale_view_is_noop(tmp_path):
                    key=lambda f: f.name)
     c1, c2 = connect(path), connect(path)
     stale = {"001_init.sql"}  # оба соединения «увидели» только 001
-    assert _apply_missing(c1, files, set(stale)) == ["002_stats.sql"]
+    assert _apply_missing(c1, files, set(stale)) == ["002_stats.sql", "003_launches.sql"]
     assert _apply_missing(c2, files, set(stale)) == []  # без ошибки «table already exists»
     assert c2.execute("SELECT COUNT(*) FROM schema_migrations WHERE name='002_stats.sql'").fetchone()[0] == 1
