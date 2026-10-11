@@ -11,9 +11,13 @@ hands-on work is limited to:
    them. If you are about to write more than two files or ~200 lines
    yourself, stop: write the interfaces (signatures, data shapes, the
    tricky function) and hand the rest to `ojc-boilerplate-executor`. HTTP
-   and API clients, adapters, config loading, storage/CRUD, wiring
-   (`main`, listeners, DI) and bot/UI handlers are never "core logic",
-   even in a brand-new project.
+   and API clients, adapters, config loading, storage/CRUD, database
+   schema, migrations and connection code, wiring (`main`, listeners, DI),
+   bot/UI handlers, rendering and message templates, and seed or sample
+   data are never "core logic", even in a brand-new project and even when
+   the user's plan says "do the core yourself". Fixes that come out of
+   your own smoke runs, xfail tests or the review are diagnosed fixes:
+   they go to the executor too.
 4. Synthesis: checking subagent results and the final report to the user.
 
 Everything else is written by `ojc-boilerplate-executor` (Sonnet) from your
@@ -71,8 +75,18 @@ New project: before designing, ask the user in one message about what the
 code cannot tell you — where it will run (VPS with Docker, local machine,
 hosting), the user's OS and shell (e.g. Windows + PowerShell), how it is
 configured and managed day to day (config files vs. an admin screen or bot
-commands), and which external accounts and keys it needs. Record the
-answers under `## Project rules` at the end of this file. Setup and deploy instructions are written
+commands), how the admin or web UI is reached (open port, SSH tunnel,
+domain), what is already installed on the server (e.g. Docker), which
+language the docs are written in, and which external accounts and keys it
+needs. Record the answers under `## Project rules` at the end of this
+file.
+
+When the user corrects how you work or states a preference for this
+project (docs language, "only docs, no code", a port, "Docker is always
+installed"), add it as a one-line rule under `## Project rules` too —
+not only to your memory, since the next session and the subagents read
+this file. Never edit `~/.claude/CLAUDE.md` or any other file outside
+the project unless the user asks for exactly that. Setup and deploy instructions are written
 for that target and that shell first; commands for another shell or a
 local run come second, clearly labelled.
 
@@ -119,6 +133,14 @@ Routing targets:
 - `ojc-quick-helper` → running checks with no fixing (tests, lint, build)
   and returning a short verdict; code search; trivial lookups and
   one-line edits.
+- Research on the web (laws, API docs, prices) → the built-in
+  `general-purpose` subagent started with `model: sonnet` (without it, it
+  runs on your own model); it returns a written summary with sources.
+
+When a brief carries a decision of the user about security or exposure
+(opening a port, public access, turning off a check), quote the user's
+words verbatim in the brief and say it is the user's decision. A
+subagent may refuse a risky change it thinks you invented.
 
 Minimize your own raw tool work — not just multi-step subtasks. Before you
 run a tool call yourself, ask: does interpreting its result require your
@@ -188,7 +210,10 @@ Writing the review brief:
 - If the Codex subagent cannot be started (permission check, classifier
   block, plugin error), retry once — a block can be one-off and a retry
   bypasses nothing. If it is blocked again, ask the user to run
-  `/codex:review` in this session and read its result yourself. "Wait for
+  `/codex:review` in this session and read its result yourself.
+  If the plugin starts the job but cannot return it ("No job found",
+  no status), run the same brief once directly with
+  `codex exec --sandbox read-only "<brief>"` and read its output. "Wait for
   the review" from the user means you get the review done, not that the
   user will do it.
 - If Codex itself fails for a reason outside the code — the account,
@@ -232,13 +257,17 @@ Servers and secrets:
 <!-- Rules specific to this project. The orchestrator adds a one-line rule
 here when the Codex review finds a kind of problem for the second time. -->
 
-- Цель развёртывания: VPS Ubuntu + Docker Compose (сервисы `bot` и `admin`, общий volume `/data`), Telegram long polling, без webhook. Разработка: Windows + PowerShell, venv на Python 3.12 (`py -3.12`), как в образе `python:3.12-slim`.
-- Управление базой знаний — только вручную через админку (FastAPI). Секреты в `.env`, некритичные константы в `config.ini`. Никакого автоматического чтения сайтов и обновления правил.
-- Production-бот @bginfosu_bot не останавливать и его webhook не менять. Переключение — только с разрешения владельца, по `docs/SWITCHOVER.md`.
-- JEV: `POST https://openrouter.ai/api/v1/systemone`, модель `~typesafe/jev-latest`. Типы вопросов `noul` (criteria `{"true","false"}` обязательны), `choice`, `score`; стоимость в `usage.cost`. Для «да / явно нет / не указано / противоречие» использовать `choice`. Проверено живым вызовом 2026-10-09.
-- Юридически значимое (статусы, условия, суммы, ссылки) — только из базы и кода. LLM пишет лишь персональное «почему», проверенное `ai/explain.check`; при сомнении — шаблон.
-- Суммы в текстах базы — только `{param:ID}`, без цифр руками.
-- Начальное наполнение — черновики с `verified=false`. Фиктивных одобрений от имени владельца не ставить. Демо — только отдельная `data/demo.db` (`bundle.demo=true`); production отказывается работать на демо-выпуске.
-- Lex.bg и Ciela — консолидированные тексты, не официальное опубликование. Существенные изменения сверять с ДВ. Законопроекты в действующие правила не включать.
-- Любой текст в Telegram HTML — через `present.h()`; разметку добавляет только код.
-- Шаг диалога сохраняется одной транзакцией вместе с отметкой update_id. Кнопки несут `session_id:revision`, устаревшие отклоняются.
+- Развёртывание: VPS Ubuntu, Docker Compose (сервисы `bot`, `admin`, общий volume `/data`), каталог `/opt/bginfo-bot`, Telegram long polling без webhook. Разработка: Windows + PowerShell, venv на Python 3.12.
+- Docker и Docker Compose на сервере всегда уже установлены — в инструкциях никаких шагов установки Docker.
+- Админка по умолчанию открыта по `http://IP_СЕРВЕРА:8091`; адрес и порт — только в `config.ini` `[admin] host/port` и на странице «Доступ к админке», не в `.env`. SSH-туннель — лишь опция (`host = 127.0.0.1`). Сервис `admin` в compose — `network_mode: host`.
+- `.env` — только секреты. Пароль админки — `ADMIN_PASSWORD` открытым текстом (хеш считается при старте), без минимальной длины.
+- README.md — основной, на английском; README_RU.md — русская копия. Документация в `docs/` — на русском.
+- `docs/QUICK_START.md` — всё от `git clone` до первого запуска (локально и на сервере); обновлять при любом изменении запуска, переменных, команд.
+- Просьба изменить инструкции = правка только `.md`, без кода, тестов и прогонов; полезный код-помощник — сначала предложить одной строкой.
+- Не усложнять без спроса (безопасность, проверки, доп. шаги): предложить одной строкой и ждать ответа.
+- Интерфейс админки — для не-разработчика: простые слова, одна понятная кнопка на действие, технические поля в «Для эксперта».
+- Репозиторий публичный (github.com/Lightwell-bg/bginfosu_bot): IP сервера и секреты в файлы репозитория не писать.
+- Юридически значимое (статусы, условия, суммы, ссылки) — только из базы и кода; LLM пишет лишь персональное «почему», проверенное `ai/explain.check`. Суммы в текстах базы — только `{param:ID}`.
+- Одобрение базы — только явным действием владельца с его именем (кнопка/команда); фиктивных одобрений не ставить.
+- Любой текст в Telegram HTML — через `present.h()`. Шаг диалога и отметка update_id — одной транзакцией; кнопки несут `session_id:revision`.
+- Схема БД на сервере уже с данными: изменения схемы — только новой миграцией `00N_*.sql`, `001_init.sql` не править.

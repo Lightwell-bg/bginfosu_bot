@@ -557,7 +557,7 @@ def test_stats_page(ctx):
     ctx.conn.execute("INSERT INTO events(at, kind) VALUES (?, 'session_started')", (now,))
     ctx.conn.execute("INSERT INTO ai_calls(at, kind, model, ok, cost_usd) VALUES (?, 'explain', 'm', 1, 0.5)", (now,))
     html = ctx.client.get("/stats").text
-    assert "0.5000" in html and "Результат показан" in html and "draft_replace" in html
+    assert "$0.50" in html and "Расходы на AI" in html and "draft_replace" in html
 
 
 XSS = "<script>alert(1)</script>"

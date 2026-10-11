@@ -25,6 +25,7 @@ from bginfo.bot.app import (
 from bginfo.config import AppConfig, Settings
 from bginfo.db.conn import open_db
 from bginfo.engine.dialog import Button, Out, Reply
+from bginfo.engine.present import AI_NOTICE
 from bginfo.kb import releases as R
 from tests.fake_tg import cb_update, make_bot, msg_update, photo_update
 from tests.kbfixture import mini_bundle
@@ -129,12 +130,32 @@ async def test_start_shows_welcome_with_two_buttons(env):
     app, session, d = env
     await d.send("/start")
     sends = session.of(SendMessage)
-    assert len(sends) == 1 and "Хотите жить в Болгарии" in sends[0].text
+    assert len(sends) == 1 and "Найдём возможные основания" in sends[0].text
+    assert "https://t.me/bginfosu" in sends[0].text and AI_NOTICE not in sends[0].text
+    assert sends[0].link_preview_options is not None and sends[0].link_preview_options.is_disabled
     assert len(d.buttons()) == 2
     assert re.match(r"^\d+:0:go:$", d.buttons()[0])
     assert d.session_row().state == "start"
-    # уведомление об AI показано один раз и запомнено
+    # приветствие уведомление об AI не показывает
+    assert repo.touch_user(app.conn, UID)["ai_notice_shown"] is False
+
+
+async def test_first_free_text_after_welcome_shows_notice_before_interpret(env):
+    app, _session, d = env
+    calls = []
+
+    async def spy(text, kb, current, uid):
+        calls.append(text)
+        return Interpretation(ok=False, error="disabled")
+
+    app.dialog.interpreter.interpret = spy
+    await d.send("/start")
+    await d.send("я пенсионер из России")
+    assert calls == []
+    assert AI_NOTICE in d.sent_texts()[-1]
     assert repo.touch_user(app.conn, UID)["ai_notice_shown"] is True
+    await d.press("parse_pending")
+    assert calls == ["я пенсионер из России"]
 
 
 async def test_duplicate_update_not_processed(env):
@@ -364,7 +385,7 @@ async def test_restart_button_starts_new_session(env):
     old = d.session_row().id
     await d.press("restart")
     assert d.session_row().id != old
-    assert "Хотите жить в Болгарии" in d.sent_texts()[-1]
+    assert "Найдём возможные основания" in d.sent_texts()[-1]
 
 
 async def test_media_gets_polite_reply(env):
@@ -433,7 +454,7 @@ async def test_crash_between_handle_and_commit_leaves_no_partial_save(env, monke
     def boom(*a, **k):
         raise RuntimeError("crash before commit")
 
-    monkeypatch.setattr(repo, "set_ai_notice_in_tx", boom)
+    monkeypatch.setattr(repo, "add_event_in_tx", boom)
     await app.dp.feed_update(app.bot, update)
     # сессия создаётся внутри транзакции шага, поэтому откат убирает и её
     assert app.conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 0
@@ -448,13 +469,13 @@ async def test_same_update_is_reprocessed_after_failure_then_deduped(env, monkey
     app, session, _d = env
     update = msg_update(78, "/start")
     with monkeypatch.context() as mp:
-        mp.setattr(repo, "set_ai_notice_in_tx", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
+        mp.setattr(repo, "add_event_in_tx", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
         await app.dp.feed_update(app.bot, update)
     assert not _update_marked(app, 78)
     session.clear()
     await app.dp.feed_update(app.bot, update)  # повтор после сбоя
     assert _update_marked(app, 78)
-    assert len(session.of(SendMessage)) == 1 and "Хотите жить в Болгарии" in session.of(SendMessage)[0].text
+    assert len(session.of(SendMessage)) == 1 and "Найдём возможные основания" in session.of(SendMessage)[0].text
     session.clear()
     await app.dp.feed_update(app.bot, update)  # дубль после успеха
     assert not session.of(SendMessage)

@@ -66,12 +66,23 @@ def migrate(conn: sqlite3.Connection) -> list[str]:
         (f for f in resources.files("bginfo.db.migrations").iterdir() if f.name.endswith(".sql")),
         key=lambda f: f.name,
     )
+    return _apply_missing(conn, files, done)
+
+
+def _apply_missing(conn: sqlite3.Connection, files: list, done: set[str]) -> list[str]:
+    """Применить миграции из ``files``, которых нет в ``done``.
+
+    Внутри write_tx наличие записи перепроверяется: другой процесс мог применить миграцию
+    между нашим чтением ``done`` и взятием блокировки на запись.
+    """
     applied = []
     for f in files:
         if f.name in done:
             continue
         sql = f.read_text(encoding="utf-8")
         with write_tx(conn):
+            if conn.execute("SELECT 1 FROM schema_migrations WHERE name=?", (f.name,)).fetchone():
+                continue
             # executescript делает COMMIT сам, поэтому выполняем операторы по одному
             for stmt in _split_sql(sql):
                 conn.execute(stmt)

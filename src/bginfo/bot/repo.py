@@ -160,6 +160,12 @@ def save_session(conn: sqlite3.Connection, s: SessionData, expected_revision: in
 # --------------------------------------------------------------------------- results, consult, events
 
 
+def _stats_day(record: dict) -> str:
+    """Дата результата для статистики: ``record["day"]`` (день в часовом поясе бота), иначе UTC-день."""
+    day = record.get("day")
+    return str(day)[:10] if day else utcnow().strftime("%Y-%m-%d")
+
+
 def add_result_in_tx(conn: sqlite3.Connection, session_id: int, record: dict) -> None:
     conn.execute(
         "INSERT INTO results(session_id, release_id, as_of, evaluation, message_html, explain_source, created_at)"
@@ -167,6 +173,16 @@ def add_result_in_tx(conn: sqlite3.Connection, session_id: int, record: dict) ->
         (session_id, record["release_id"], record["as_of"],
          json.dumps(record["evaluation"], ensure_ascii=False), record["message_html"],
          record["explain_source"], _now()),
+    )
+    # обезличенная статистика: без id пользователя и сессии, только дата (без времени), не чистится при /delete
+    conn.execute(
+        "INSERT INTO stats_results(day, release_id, result_kind, primary_ground, primary_status, situation_key,"
+        " situation, grounds, members, explain_source) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (_stats_day(record), record["release_id"], record.get("result_kind", "ok"), record.get("primary_ground"),
+         record.get("primary_status"), record.get("situation_key", "unknown|unknown|?|?"),
+         json.dumps(record.get("situation", {}), ensure_ascii=False, sort_keys=True),
+         json.dumps(record.get("grounds", {}), ensure_ascii=False, sort_keys=True),
+         int(record.get("members", 0)), record["explain_source"]),
     )
 
 
@@ -288,6 +304,8 @@ def cleanup(conn: sqlite3.Connection, retention_days: int) -> None:
             (cutoff,),
         )
         conn.execute("UPDATE ai_calls SET tg_user_id = NULL WHERE at < ?", (cutoff,))
+        # events содержат session_id: чистим по сроку хранения вместе с анкетами
+        conn.execute("DELETE FROM events WHERE at < ?", (cutoff,))
         conn.execute("DELETE FROM processed_updates WHERE at < ?", (iso(now - timedelta(days=7)),))
         conn.execute("DELETE FROM admin_login_attempts WHERE at < ?", (iso(now - timedelta(days=30)),))
         # счётчики лимитов переживают /delete; хватает двух суток (лимит суточный, по UTC-дню)

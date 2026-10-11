@@ -36,7 +36,7 @@ from aiogram.exceptions import (
     TelegramUnauthorizedError,
 )
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message, Update
+from aiogram.types import CallbackQuery, LinkPreviewOptions, Message, Update
 
 from bginfo.ai.explain import Explainer
 from bginfo.ai.interpret import Interpreter
@@ -318,10 +318,11 @@ class BotApp:
         for reply in out.replies:
             markup = keyboard(reply.buttons, sid, rev) if reply.buttons else None
             msg = callback.message if callback is not None else None
+            lpo = LinkPreviewOptions(is_disabled=True) if reply.no_preview else None
             if reply.edit and msg is not None and len(reply.html) <= MSG_LIMIT:
                 try:
                     await self.bot.edit_message_text(reply.html, chat_id=chat_id, message_id=msg.message_id,
-                                                     reply_markup=markup)
+                                                     reply_markup=markup, link_preview_options=lpo)
                 except TelegramBadRequest as e:
                     if "message is not modified" not in str(e):
                         raise
@@ -329,7 +330,8 @@ class BotApp:
             chunks = split_html(reply.html, MSG_LIMIT)
             for i, chunk in enumerate(chunks):
                 last = i == len(chunks) - 1
-                await self.bot.send_message(chat_id, chunk, reply_markup=markup if last else None)
+                await self.bot.send_message(chat_id, chunk, reply_markup=markup if last else None,
+                                            link_preview_options=lpo)
         if out.alert:
             if callback is not None:
                 await self._answer(callback, out.alert)

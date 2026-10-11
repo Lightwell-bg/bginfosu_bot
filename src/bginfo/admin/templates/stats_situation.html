@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Ситуация{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p><a href="/stats?period={{ period }}">← вся статистика</a></p>
+{% if rows %}
+<table>
+  <thead><tr><th>Дата</th><th>Версия базы</th><th>Итог</th><th>Первое основание</th><th>Все основания</th><th>Семья</th><th>Объяснение</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr><td>{{ r.day }}</td><td>№{{ r.release_id if r.release_id is not none else '—' }}</td><td>{{ r.kind }}</td>
+      <td>{{ r.first }}{% if r.first_status %} <span class="muted small">({{ r.first_status }})</span>{% endif %}</td>
+      <td>{% for c in r.chips %}<span class="chip-st {{ c.cls }}" title="{{ c.label }}">{{ c.title }}</span> {% endfor %}</td>
+      <td>{{ 'да' if r.family else 'нет' }}</td><td>{{ r.source }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">За этот период данных нет.</p>
+{% endif %}
+{% endblock %}

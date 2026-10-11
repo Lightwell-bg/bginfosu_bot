@@ -41,7 +41,7 @@ async def press(d, s, snap, u, action, arg=""):
 async def test_buttons_only_to_result():
     d, s, snap, u = make()
     out = await d.handle(s, Event("start"), snap, u)
-    assert "Хотите жить в Болгарии" in out.replies[0].html
+    assert "Найдём возможные основания" in out.replies[0].html
     out = await press(d, s, snap, u, "go")
     assert "Гражданство" in out.replies[-1].html
     await press(d, s, snap, u, "ans", "third")

@@ -24,6 +24,7 @@ from bginfo.engine.planner import Step, next_step, question_for
 from bginfo.engine.result import build_result, display_value, render_text, view_to_dict
 from bginfo.kb import model as m
 from bginfo.kb.releases import Snapshot
+from bginfo.stats.situation import situation_key, situation_of
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ class Reply:
     html: str
     buttons: list[list[Button]] = field(default_factory=list)
     edit: bool = False  # заменить сообщение с нажатой кнопкой (для переключателей)
+    no_preview: bool = False  # отключить превью ссылок
 
 
 @dataclass
@@ -160,9 +162,9 @@ class Dialog:
                 btns.insert(0, [Button("Показать актуальный результат", "refresh")])
             out.say(banner + "У вас есть сохранённая анкета. Продолжим с того же места?", btns)
             return out
-        out.say(banner + P.h(P.WELCOME) + "\n\n" + P.AI_NOTICE,
+        out.say(banner + P.h(P.WELCOME),
                 [[Button("Подобрать вариант", "go")], [Button("Описать ситуацию самому", "free")]])
-        out.ai_notice_shown = True
+        out.replies[-1].no_preview = True
         out.events.append(("session_started", ""))
         return out
 
@@ -692,9 +694,18 @@ class Dialog:
         view = view_to_dict(rv)
         s.ui["last_view"] = view
         s.state = "result"
+        sit = situation_of(s.profile)
         out.result_record = {
             "release_id": snap.release_id, "as_of": as_of.isoformat(), "message_html": html,
+            "day": self.today().isoformat(),  # для статистики: только дата в часовом поясе бота
             "explain_source": rv.explain_source,
+            "result_kind": rv.kind,
+            "primary_ground": rv.primary.ground_id if rv.primary else None,
+            "primary_status": rv.primary.status.value if rv.primary else None,
+            "situation": sit,
+            "situation_key": situation_key(sit),
+            "grounds": {r.ground_id: r.status.value for r in ev.for_subject(MAIN)},
+            "members": len(s.profile.members()),
             "evaluation": [
                 {"ground": r.ground_id, "subject": r.subject, "status": r.status.value, "reasons": r.reasons,
                  "requirements": [{"id": q.id, "result": q.result.value, "disputed": q.disputed} for q in r.requirements]}
