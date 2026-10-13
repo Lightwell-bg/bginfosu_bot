@@ -227,6 +227,7 @@
     if (view && view.question) renderQuestion(view.question, data);
     else if (view && view.review) renderReview(view.review, data);
     else if (view && view.result) renderResult(view.result, data);
+    else if (view && view.welcome) renderWelcome(view.welcome, data);
     else renderGeneric(data);
     if (data.alert) toast(data.alert);
     if (busy) setBusy(false);
@@ -292,17 +293,68 @@
     return wrap;
   }
 
+  function openExternal(url) {
+    var u = safeUrl(url);
+    if (!u || !/^https:\/\//i.test(u)) return;
+    if (tg && tg.openTelegramLink && /^https:\/\/t\.me\//i.test(u)) tg.openTelegramLink(u);
+    else openLink(u);
+  }
+
+  /* Стартовый экран: заголовок, перечень, кнопки и «Полезное от BGINFO». Кнопки ответа сервера не рисуем. */
+  function renderWelcome(w, data) {
+    hideMain(); setBack(null);
+    var root = screen();
+    if (w.demo) root.appendChild(el('div', 'badge', 'ДЕМО-база. Тестовые карточки, не для реальных решений.'));
+    root.appendChild(el('h1', null, w.title));
+    root.appendChild(el('p', 'w-intro', w.intro));
+    var ul = el('ul', 'w-points');
+    (w.points || []).forEach(function (p) {
+      var li = el('li');
+      li.appendChild(el('span', 'w-icon', p.icon));
+      li.appendChild(el('span', 'w-text', p.text));
+      ul.appendChild(li);
+    });
+    root.appendChild(ul);
+    (w.notes || []).forEach(function (n) { root.appendChild(el('p', 'note', n)); });
+    if (w.cta) root.appendChild(el('p', 'w-cta', w.cta));
+
+    var go = el('button', 'btn', 'Подобрать вариант');
+    go.addEventListener('click', function () { btn('go'); });
+    root.appendChild(go);
+    var freeWrap = null;
+    var fb = el('button', 'btn secondary', 'Рассказать своими словами');
+    fb.addEventListener('click', function () {
+      if (freeWrap) { freeWrap.remove(); freeWrap = null; return; }
+      freeWrap = freeBlock();
+      fb.parentNode.insertBefore(freeWrap, fb.nextSibling);
+      freeWrap.querySelector('textarea').focus();
+    });
+    root.appendChild(fb);
+
+    var links = (w.links || []).filter(function (l) { return l && typeof l.url === 'string' && /^https:\/\//i.test(l.url); });
+    if (links.length) {
+      var sec = el('div', 'w-links');
+      sec.appendChild(el('h3', null, 'Полезное от BGINFO'));
+      links.forEach(function (l) {
+        var row = el('a', 'w-link');
+        row.setAttribute('href', l.url);
+        row.addEventListener('click', function (ev) { ev.preventDefault(); openExternal(l.url); });
+        row.appendChild(el('span', 'w-icon', l.icon));
+        row.appendChild(el('span', 'w-text', l.title));
+        row.appendChild(el('span', 'w-chev', '›'));
+        sec.appendChild(row);
+      });
+      root.appendChild(sec);
+    }
+  }
+
   /* Универсальный экран: приветствие, подтверждения, консультация, удаление и т. п. */
   function renderGeneric(data) {
     hideMain(); setBack(null);
     var root = screen();
     var replies = data.replies || [];
-    var isWelcome = replies.some(function (r) {
-      return (r.buttons || []).some(function (row) { return row.some(function (b) { return b.action === 'go'; }); });
-    });
     replies.forEach(function (r) { root.appendChild(rich(r.html)); });
-    replyButtons(root, replies, isWelcome ? function (b) { return b.action === 'free'; } : null);
-    if (isWelcome) root.appendChild(freeBlock());
+    replyButtons(root, replies);
     var hasButtons = replies.some(function (r) { return (r.buttons || []).length; });
     if (!replies.length && !hasButtons) root.appendChild(el('p', 'note', 'Нет данных для показа.'));
   }

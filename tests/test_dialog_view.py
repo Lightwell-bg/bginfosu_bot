@@ -135,7 +135,7 @@ async def test_view_result():
 
 async def test_view_none_for_other_steps():
     d, s, snap, u = make()
-    assert (await d.handle(s, Event("start"), snap, u)).view is None
+    assert set((await d.handle(s, Event("start"), snap, u)).view) == {"welcome"}
     assert (await press(d, s, snap, u, "free")).view is None
     assert (await d.handle(s, Event("command", action="delete"), snap, u)).view is None
 

@@ -136,7 +136,7 @@ def test_full_flow_to_result_and_copy_once(env):
     r = env.open()
     assert r.status_code == 200
     cur = r.json()
-    assert cur["replies"][0]["buttons"] and cur["view"] is None and cur["sid"] and cur["rev"] is not None
+    assert cur["replies"][0]["buttons"] and set(cur["view"]) == {"welcome"} and cur["sid"] and cur["rev"] is not None
     assert {"text", "action", "arg"} <= set(cur["replies"][0]["buttons"][0][0])
     r = env.to_review(cur)
     assert r.json()["view"]["review"]["lines"]

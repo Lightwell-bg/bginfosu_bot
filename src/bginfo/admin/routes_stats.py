@@ -185,7 +185,9 @@ def stats(request: Request, period: str | None = None, user: str = Depends(curre
         ("Расходы на AI", _money(ov["ai_cost_usd"]), ""),
         ("Объяснения от модели", pct_text(ov["llm_share"]), "остальное — шаблон"),
     ]
+    chn = ov["channels"]
     return render(request, "stats.html", periods=PERIODS, period=period, tiles=tiles, daily=_bar_rows(daily),
+                  ch_sessions=chn["sessions"], ch_results=chn["results"],
                   drop=drop, in_progress=dropoff["in_progress"], recalc=ov["recalculations"],
                   history_from=_ru_date(first_day) if first_day else None, kinds=kinds, grounds=grounds, dims=dims, sits=sits, audit=audit,
                   status_legend=[STATUS_RU[s] for s in STATUS_ORDER])
@@ -196,6 +198,18 @@ LAUNCH_KIND_RU = {"none": "ничего не подошло", "unsupported": "о
                   "clarify": "не хватило данных"}
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,64}$")
 LAUNCHES_PER_PAGE = 50
+
+
+CHANNEL_RU = {"bot": "Бот", "webapp": "Форма"}
+CHANNEL_IN_RU = {"bot": "в боте", "webapp": "в форме"}
+
+
+def channel_label(session_ch: str | None, result_ch: str | None) -> str:
+    """«Бот» / «Форма»; если последний результат получен в другом канале — «Бот → результат в форме»."""
+    base = CHANNEL_RU.get(session_ch or "bot", "Бот")
+    if result_ch in CHANNEL_IN_RU and result_ch != (session_ch or "bot"):
+        return f"{base} → результат {CHANNEL_IN_RU[result_ch]}"
+    return base
 
 
 def _local(value: str | None, tz) -> str:
@@ -239,15 +253,16 @@ def launch_picked(conn: sqlite3.Connection, r: dict, names: _Names, cache: dict)
 
 
 @router.get("/stats/launches")
-def stats_launches(request: Request, page: str | None = None, period: str | None = None,
+def stats_launches(request: Request, page: str | None = None, period: str | None = None, channel: str | None = None,
                    user: str = Depends(current_user), conn: sqlite3.Connection = Depends(get_conn)):
     period = _period(period)
+    channel = channel if channel in CHANNEL_RU else None
     try:
         page_n = int(page) if page is not None else 1
     except ValueError:
         page_n = 1
     st = get_state(request)
-    data = launches(conn, page_n, LAUNCHES_PER_PAGE, _since(period))
+    data = launches(conn, page_n, LAUNCHES_PER_PAGE, _since(period), channel)
     names = _Names(conn)
     releases: dict = {}
     rows = []
@@ -259,16 +274,21 @@ def stats_launches(request: Request, page: str | None = None, period: str | None
         rows.append({
             "when": _local(r["started_at"], st.tz), "name": name, "username": uname,
             "link": f"https://t.me/{uname}" if uname and USERNAME_RE.match(uname) else None,
-            "tg_user_id": r["tg_user_id"], "channel": "Форма" if r.get("channel") == "webapp" else "Бот",
+            "tg_user_id": r["tg_user_id"], "channel": channel_label(r.get("channel"), r.get("result_channel")),
             "state_label": label, "state_cls": cls, "picked": picked,
             "results_count": r["results_count"], "last_result": _local(r["last_result_at"], st.tz),
         })
     p, pages = data["page"], data["pages"]
 
-    def url(n: int) -> str:
-        return f"/stats/launches?page={n}&period={period}"
+    ch_q = f"&channel={channel}" if channel else ""
 
+    def url(n: int) -> str:
+        return f"/stats/launches?page={n}&period={period}{ch_q}"
+
+    channels = [("", "Все", "/stats/launches?period=" + period)] + [
+        (k, v, f"/stats/launches?period={period}&channel={k}") for k, v in CHANNEL_RU.items()]
     return render(request, "stats_launches.html", periods=PERIODS, period=period, rows=rows, total=data["total"],
+                  channel=channel or "", channels=channels, ch_q=ch_q,
                   page=p, pages=pages, first_url=url(1) if p > 1 else None, prev_url=url(p - 1) if p > 1 else None,
                   next_url=url(p + 1) if p < pages else None, last_url=url(pages) if p < pages else None,
                   retention_days=st.config.privacy.retention_days)

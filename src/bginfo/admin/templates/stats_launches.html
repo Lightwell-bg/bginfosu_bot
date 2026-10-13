@@ -4,8 +4,9 @@
 <h1>Запуски бота</h1>
 <p><a href="/stats?period={{ period }}">← вся статистика</a></p>
 <p class="period-switch">
-  {% for p, label in periods %}<a class="button{{ '' if p == period else ' secondary' }}" href="/stats/launches?period={{ p }}">{{ label }}</a>{% endfor %}
+  {% for p, label in periods %}<a class="button{{ '' if p == period else ' secondary' }}" href="/stats/launches?period={{ p }}{{ ch_q }}">{{ label }}</a>{% endfor %}
 </p>
+<p class="small">Канал: {% for k, label, u in channels %}{% if k == channel %}<b>{{ label }}</b>{% else %}<a href="{{ u }}">{{ label }}</a>{% endif %}{{ ' · ' if not loop.last }}{% endfor %}</p>
 <p class="hint">Кто и когда запускал бота и что ему подобрано. Анкеты хранятся {{ retention_days }} дней (срок из config [privacy] retention_days), удалённые пользователем через /delete здесь не видны.</p>
 <p>Всего запусков: <b>{{ total }}</b></p>
 {% macro pager() %}

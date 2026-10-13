@@ -74,7 +74,15 @@ def overview(conn: sqlite3.Connection, since: datetime | None, tz: str = DEFAULT
     ai = conn.execute("SELECT COUNT(*) n, COALESCE(SUM(cost_usd), 0) c FROM ai_calls "
                       "WHERE at >= ? AND status='done'", (s,)).fetchone()
     results_total = sum(by_kind.values())
+    by_channel = {
+        "sessions": {"bot": 0, "webapp": 0}, "results": {"bot": 0, "webapp": 0},
+    }
+    for tbl in ("sessions", "results"):
+        for r in conn.execute(f"SELECT channel, COUNT(*) n FROM {tbl} WHERE created_at >= ? GROUP BY channel", (s,)):
+            if r["channel"] in by_channel[tbl]:
+                by_channel[tbl][r["channel"]] = r["n"]
     return {
+        "channels": by_channel,
         "new_users": new_users, "started": started, "completed": completed, "sessions_started": started,
         "conversion": _div(completed, started), "results_total": results_total, "results": results_total,
         "recalculations": max(0, results_total - completed), "consults": consults,

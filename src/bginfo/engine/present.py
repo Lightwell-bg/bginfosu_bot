@@ -21,25 +21,49 @@ DEMO_BANNER = "🧪 <b>ДЕМО-база.</b> Тестовые карточки,
 STATUS_ICON = {Status.FIT: "✅", Status.POSSIBLE_AFTER: "🟡", Status.CLARIFY: "❔",
                Status.INDIVIDUAL: "🧑‍⚖️", Status.NOT_ELIGIBLE: "⛔"}
 
-WELCOME = (
-    "🇧🇬 Найдём возможные основания для вашего проживания в Болгарии.\n"
-    "Я задам вопросы о вашей ситуации и покажу:\n"
-    "✅ какие основания могут подойти;\n"
-    "📋 какие условия нужно выполнить;\n"
-    "🔎 что необходимо уточнить;\n"
-    "➡️ с чего начать оформление.\n"
-    "Отвечайте кнопками или своими словами. Точность результата зависит от ваших ответов.\n"
-    "Если потребуется индивидуальный разбор, можно заказать консультацию BGINFO.\n"
-    "👇 Начнём с анкеты.\n"
-    "💬 Канал о жизни в Болгарии:\n"
-    "https://t.me/bginfosu\n"
-    "📰 Ежедневные новости Болгарии:\n"
-    "https://t.me/bginfo_bgnews\n"
-    'Виртуальный помощник компании "Информация о Болгарии" BGINFO.EU\n'
-    "https://t.me/bginfosuai_bot\n"
-    "📬 Подписаться на обновления BGINFO:\n"
-    "https://bginfo.eu/subscribe/"
-)
+WELCOME_TITLE = "🇧🇬 Найдём возможные основания для вашего проживания в Болгарии."
+WELCOME_INTRO = "Я задам вопросы о вашей ситуации и покажу:"
+WELCOME_POINTS = [
+    ("✅", "какие основания могут подойти"),
+    ("📋", "какие условия нужно выполнить"),
+    ("🔎", "что необходимо уточнить"),
+    ("➡️", "с чего начать оформление"),
+]
+WELCOME_NOTES = [
+    "Отвечайте кнопками или своими словами. Точность результата зависит от ваших ответов.",
+    "Если потребуется индивидуальный разбор, можно заказать консультацию BGINFO.",
+]
+WELCOME_CTA = "👇 Начнём с анкеты."
+WELCOME_LINKS = [
+    ("💬", "Канал о жизни в Болгарии", "https://t.me/bginfosu"),
+    ("📰", "Ежедневные новости Болгарии", "https://t.me/bginfo_bgnews"),
+    ("🤖", 'Виртуальный помощник компании "Информация о Болгарии" BGINFO.EU', "https://t.me/bginfosuai_bot"),
+    ("📬", "Подписаться на обновления BGINFO", "https://bginfo.eu/subscribe/"),
+]
+
+
+def render_welcome_html() -> str:
+    """Приветствие для бота: структура с компактным блоком ссылок (без голых URL)."""
+    points = [f"{icon} {h(text)}{';' if i < len(WELCOME_POINTS) - 1 else '.'}"
+              for i, (icon, text) in enumerate(WELCOME_POINTS)]
+    links = [f'{icon} <a href="{html.escape(url, quote=True)}">{h(title)}</a>' for icon, title, url in WELCOME_LINKS]
+    return "\n\n".join([
+        f"<b>{h(WELCOME_TITLE)}</b>",
+        h(WELCOME_INTRO) + "\n" + "\n".join(points),
+        "\n".join(h(n) for n in WELCOME_NOTES),
+        h(WELCOME_CTA),
+        "\n".join(links),
+    ])
+
+
+def welcome_view() -> dict:
+    """Данные приветствия для экрана мини-аппа."""
+    return {
+        "title": WELCOME_TITLE, "intro": WELCOME_INTRO,
+        "points": [{"icon": i, "text": t} for i, t in WELCOME_POINTS],
+        "notes": list(WELCOME_NOTES), "cta": WELCOME_CTA,
+        "links": [{"icon": i, "title": t, "url": u} for i, t, u in WELCOME_LINKS],
+    }
 AI_NOTICE = ("<i>Если пишете своими словами, текст кратко анализируется AI-сервисом (через OpenRouter), чтобы "
              "понять вашу ситуацию. Не присылайте номера паспортов, сканы и контакты. Удалить анкету: /delete.</i>")
 UNAVAILABLE = ("Сервис подбора сейчас готовится: база проверенных правил ещё не опубликована. "
@@ -48,6 +72,9 @@ UNAVAILABLE = ("Сервис подбора сейчас готовится: б�
 
 def h(s: object) -> str:
     return html.escape(str(s), quote=False)
+
+
+WELCOME = render_welcome_html()  # совместимость: готовый HTML приветствия
 
 
 def link(lk: Link) -> str:

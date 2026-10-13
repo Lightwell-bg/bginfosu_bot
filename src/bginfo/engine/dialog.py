@@ -175,8 +175,9 @@ class Dialog:
         rows = [[Button("Подобрать вариант", "go")], [Button("Описать ситуацию самому", "free")]]
         if self.webapp_url:
             rows.append([Button("📝 Заполнить в форме", "webapp")])
-        out.say(banner + P.h(P.WELCOME), rows)
+        out.say(banner + P.render_welcome_html(), rows)
         out.replies[-1].no_preview = True
+        out.view = {"welcome": {**P.welcome_view(), "demo": bool(kb.demo)}}
         out.events.append(("session_started", ""))
         return out
 

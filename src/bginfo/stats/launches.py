@@ -11,13 +11,14 @@ from bginfo.db.conn import iso, utcnow
 from bginfo.stats.queries import ABANDON_AFTER_HOURS
 
 
-def launches(conn: sqlite3.Connection, page: int, per_page: int = 50, since: datetime | None = None) -> dict:
+def launches(conn: sqlite3.Connection, page: int, per_page: int = 50, since: datetime | None = None,
+             channel: str | None = None) -> dict:
     """Страница запусков, новые сверху.
 
     Возвращает {"rows": [...], "total": int, "page": int (после ограничения 1..pages), "pages": int (>=1),
     "per_page": int}. Строка: session_id, started_at (UTC iso), tg_user_id, username, first_name, last_name,
     channel ("bot" | "webapp"), state ("result" | "in_progress" | "abandoned"), results_count, last_result_at, result_kind,
-    primary_ground, primary_status, release_id (последний результат сессии; при его отсутствии None),
+    primary_ground, primary_status, release_id, result_channel (канал последнего результата) (последний результат сессии; при его отсутствии None),
     details_source ("result" | "session_view" | "missing").
 
     Детали результата (result_kind/primary_*) берутся из последней записи results. У старых результатов
@@ -28,21 +29,24 @@ def launches(conn: sqlite3.Connection, page: int, per_page: int = 50, since: dat
     """
     per_page = max(1, int(per_page))
     s = iso(since) if since else ""
-    total = conn.execute("SELECT COUNT(*) FROM sessions WHERE created_at >= ?", (s,)).fetchone()[0]
+    ch = channel if channel in ("bot", "webapp") else None
+    ch_sql = " AND s.channel = ?" if ch else ""
+    ch_args: tuple = (ch,) if ch else ()
+    total = conn.execute(f"SELECT COUNT(*) FROM sessions s WHERE s.created_at >= ?{ch_sql}", (s, *ch_args)).fetchone()[0]
     pages = max(1, math.ceil(total / per_page))
     page = min(max(1, int(page)), pages)
     fresh_after = iso(utcnow() - timedelta(hours=ABANDON_AFTER_HOURS))
     sess = conn.execute(
-        """
+        f"""
         SELECT s.id AS session_id, s.created_at AS started_at, s.tg_user_id,
                u.username, u.first_name, u.last_name, s.channel, s.status AS _status, s.updated_at AS _updated, s.ui AS _ui
           FROM sessions s
           LEFT JOIN users u ON u.tg_user_id = s.tg_user_id
-         WHERE s.created_at >= ?
+         WHERE s.created_at >= ?{ch_sql}
          ORDER BY s.created_at DESC, s.id DESC
          LIMIT ? OFFSET ?
         """,
-        (s, per_page, (page - 1) * per_page),
+        (s, *ch_args, per_page, (page - 1) * per_page),
     ).fetchall()
     ids = [r["session_id"] for r in sess]
     counts: dict[int, tuple[int, int]] = {}
@@ -58,7 +62,7 @@ def launches(conn: sqlite3.Connection, page: int, per_page: int = 50, since: dat
         if last_ids:
             ph2 = ",".join("?" * len(last_ids))
             for r in conn.execute(
-                "SELECT id, created_at, result_kind, primary_ground, primary_status, release_id "
+                "SELECT id, created_at, result_kind, primary_ground, primary_status, release_id, channel "
                 f"FROM results WHERE id IN ({ph2})",
                 last_ids,
             ):
@@ -90,6 +94,7 @@ def launches(conn: sqlite3.Connection, page: int, per_page: int = 50, since: dat
             "last_result_at": res["created_at"] if res is not None else None,
             "result_kind": kind, "primary_ground": ground, "primary_status": status,
             "release_id": res["release_id"] if res is not None else None,
+            "result_channel": res["channel"] if res is not None else None,
             "details_source": source,
         })
     return {"rows": rows, "total": total, "page": page, "pages": pages, "per_page": per_page}
