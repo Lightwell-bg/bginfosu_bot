@@ -3,97 +3,148 @@
 {% block content %}
 {% macro bar(w) %}<span class="bar"><span class="bar-fill {{ w }}"></span></span>{% endmacro %}
 {% macro empty() %}<p class="muted">За этот период данных нет.</p>{% endmacro %}
-<h1>Статистика</h1>
-<p><a class="button big-link" href="/stats/launches?period={{ period }}">Запуски бота (кто и что подобрано)</a></p>
-<p class="period-switch">
-  {% for p, label in periods %}<a class="button{{ '' if p == period else ' secondary' }}" href="/stats?period={{ p }}">{{ label }}</a>{% endfor %}
-</p>
+
+<div class="head stats-head">
+  <h1>Статистика</h1>
+  <div class="period-switch seg-control" role="group" aria-label="Период">
+    {% for p, label in periods %}<a class="button{{ '' if p == period else ' secondary' }}" href="/stats?period={{ p }}">{{ label }}</a>{% endfor %}
+  </div>
+</div>
 <p class="hint">Сколько людей пользуется ботом, до чего они доходят и какие ситуации встречаются чаще всего. Личные данные не хранятся: только категории (например, «Другая страна · Пенсия»), без сумм и текстов.</p>
 
-<div class="tiles stat-tiles">
-{% for title, value, sub in tiles %}
-  <div class="tile stat-tile"><span class="muted small">{{ title }}</span><span class="big">{{ value }}</span>{% if sub %}<span class="muted small">{{ sub }}</span>{% endif %}</div>
-{% endfor %}
-</div>
-<p class="muted small">Пересчётов результата: {{ recalc }}</p>
-<p class="small">Откуда запуски: Бот {{ ch_sessions.bot }} · Форма {{ ch_sessions.webapp }}; результаты: Бот {{ ch_results.bot }} · Форма {{ ch_results.webapp }}</p>
+<nav class="subnav" aria-label="Разделы статистики">
+  <a href="#overview">Обзор</a><a href="#daily">По дням</a><a href="#drop">Где бросают</a><a href="#outcomes">Итоги и основания</a><a href="#dims">По признакам</a><a href="#sits">Типовые ситуации</a><a href="#audit">Журнал</a>
+  <a class="button secondary subnav-cta" href="/stats/launches?period={{ period }}">Запуски бота (кто и что подобрано) →</a>
+</nav>
 
-<h2>По дням</h2>
-{% if daily %}
-<table>
-  <thead><tr><th>День</th><th>Начато</th><th>Результатов</th><th>Заявок</th><th>Ошибок</th><th>AI</th><th></th></tr></thead>
-  <tbody>
-  {% for r in daily %}
-    <tr><td>{{ r.day }}</td><td>{{ r.started }}</td><td>{{ r.results }}</td><td>{{ r.consults }}</td><td>{{ r.errors }}</td><td>{{ r.ai }}</td><td class="bar-cell">{{ bar(r.w) }}</td></tr>
+{# --- Обзор: воронка + техника --- #}
+<section id="overview" class="stats-section">
+  <h2>Как люди проходят анкету</h2>
+  <div class="funnel">
+  {% for title, value, sub in tiles[:4] %}
+    <div class="funnel-step">
+      <span class="step-n">{{ loop.index }}</span>
+      <span class="muted small">{{ title }}</span>
+      <span class="big">{{ value }}</span>
+      {% if sub %}<span class="muted small">{{ sub }}</span>{% endif %}
+    </div>
   {% endfor %}
-  </tbody>
-</table>
-{% else %}{{ empty() }}{% endif %}
+  </div>
 
-<h2>Где бросают анкету</h2>
-<p class="muted small">Брошенные анкеты без результата за период (в пределах срока хранения анкет). Сейчас заполняют: <b>{{ in_progress }}</b></p>
-{% if drop %}
-<table>
-  <thead><tr><th>Вопрос</th><th>Сколько</th><th></th></tr></thead>
-  <tbody>
-  {% for r in drop %}<tr><td>{{ r.label }}</td><td>{{ r.n }}</td><td class="bar-cell">{{ bar(r.w) }}</td></tr>{% endfor %}
-  </tbody>
-</table>
-{% else %}{{ empty() }}{% endif %}
+  <div class="cards overview-extra">
+    <div class="card">
+      <h3>Откуда приходят</h3>
+      <table class="mini">
+        <thead><tr><th></th><th class="num">Бот</th><th class="num">Форма</th></tr></thead>
+        <tbody>
+          <tr><td>Запуски</td><td class="num">{{ ch_sessions.bot }}</td><td class="num">{{ ch_sessions.webapp }}</td></tr>
+          <tr><td>Результаты</td><td class="num">{{ ch_results.bot }}</td><td class="num">{{ ch_results.webapp }}</td></tr>
+        </tbody>
+      </table>
+      <p class="muted small">Откуда запуски: Бот {{ ch_sessions.bot }} · Форма {{ ch_sessions.webapp }}; результаты: Бот {{ ch_results.bot }} · Форма {{ ch_results.webapp }}</p>
+    </div>
+    <div class="card">
+      <h3>Работа бота</h3>
+      <div class="kv-grid">
+      {% for title, value, sub in tiles[4:] %}
+        <div class="kv"><span class="muted small">{{ title }}</span><b>{{ value }}</b>{% if sub %}<span class="muted small">{{ sub }}</span>{% endif %}</div>
+      {% endfor %}
+      </div>
+      <p class="muted small">Пересчётов результата: {{ recalc }}</p>
+    </div>
+  </div>
+</section>
 
-<h2>Итоги</h2>
-{% if kinds %}
-<p>{% for k in kinds %}<span class="badge gray chip">{{ k.label }}: {{ k.n }}</span> {% endfor %}</p>
-{% else %}{{ empty() }}{% endif %}
+<section id="daily" class="card stats-section">
+  <h2>По дням</h2>
+  {% if daily %}
+  <table>
+    <thead><tr><th>День</th><th class="num">Начато</th><th class="num">Результатов</th><th class="num">Заявок</th><th class="num">Ошибок</th><th class="num">AI</th><th></th></tr></thead>
+    <tbody>
+    {% for r in daily %}
+      <tr><td>{{ r.day }}</td><td class="num">{{ r.started }}</td><td class="num">{{ r.results }}</td><td class="num">{{ r.consults }}</td><td class="num">{{ r.errors }}</td><td class="num">{{ r.ai }}</td><td class="bar-cell">{{ bar(r.w) }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}{{ empty() }}{% endif %}
+</section>
 
-{% if history_from %}<p class="muted small">Разрезы по ситуациям собираются с {{ history_from }}</p>{% endif %}
-<h2>Основания</h2>
-{% if grounds %}
-<p class="small legend">{% for label, cls in status_legend %}<span class="swatch {{ cls }}"></span> {{ label }} {% endfor %}</p>
-<table>
-  <thead><tr><th>Основание</th><th>Был первым</th><th>Оценено</th><th>Как оценивали</th></tr></thead>
-  <tbody>
-  {% for g in grounds %}
-    <tr><td>{{ g.title }}</td><td>{{ g.primary }}</td><td>{{ g.evaluated }}</td>
-      <td class="bar-cell"><span class="bar stack">{% for s in g.segs %}<span class="seg {{ s.cls }} {{ s.w }}" title="{{ s.label }}: {{ s.n }}"></span>{% endfor %}</span>
-        <span class="muted small">{% for s in g.segs %}{{ s.label }} {{ s.n }}{{ ', ' if not loop.last }}{% endfor %}</span></td></tr>
+<section id="drop" class="card stats-section">
+  <h2>Где бросают анкету</h2>
+  <p class="muted small">Брошенные анкеты без результата за период (в пределах срока хранения анкет). Сейчас заполняют: <b>{{ in_progress }}</b></p>
+  {% if drop %}
+  <table>
+    <thead><tr><th>Вопрос</th><th class="num">Сколько</th><th></th></tr></thead>
+    <tbody>
+    {% for r in drop %}<tr><td>{{ r.label }}</td><td class="num">{{ r.n }}</td><td class="bar-cell">{{ bar(r.w) }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% else %}{{ empty() }}{% endif %}
+</section>
+
+<section id="outcomes" class="card stats-section">
+  <h2>Итоги</h2>
+  {% if kinds %}
+  <div class="kind-row">{% for k in kinds %}<div class="kind"><b>{{ k.n }}</b><span class="muted small">{{ k.label }}</span></div>{% endfor %}</div>
+  {% else %}{{ empty() }}{% endif %}
+
+  <h2 class="mt">Основания</h2>
+  {% if history_from %}<p class="muted small">Разрезы по ситуациям собираются с {{ history_from }}</p>{% endif %}
+  {% if grounds %}
+  <p class="small legend">{% for label, cls in status_legend %}<span class="swatch {{ cls }}"></span> {{ label }} {% endfor %}</p>
+  <table>
+    <thead><tr><th>Основание</th><th class="num">Был первым</th><th class="num">Оценено</th><th>Как оценивали</th></tr></thead>
+    <tbody>
+    {% for g in grounds %}
+      <tr><td>{{ g.title }}</td><td class="num">{{ g.primary }}</td><td class="num">{{ g.evaluated }}</td>
+        <td class="bar-cell"><span class="bar stack">{% for s in g.segs %}<span class="seg {{ s.cls }} {{ s.w }}" title="{{ s.label }}: {{ s.n }}"></span>{% endfor %}</span>
+          <span class="muted small seg-text">{% for s in g.segs %}{{ s.label }} {{ s.n }}{{ ', ' if not loop.last }}{% endfor %}</span></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}{{ empty() }}{% endif %}
+</section>
+
+<section id="dims" class="stats-section">
+  <h2>По признакам</h2>
+  <div class="cards dim-cards">
+  {% for d in dims %}
+    <div class="card">
+      <h3>{{ d.title }}</h3>
+      {% if d.multi %}<p class="muted small">Один результат может попасть в несколько строк.</p>{% endif %}
+      {% if d.rows %}
+      <table class="mini">
+        <thead><tr><th>Значение</th><th>Результатов</th><th>Доля</th><th>Чаще всего первым</th></tr></thead>
+        <tbody>
+        {% for r in d.rows %}
+          <tr><td>{{ r.label }}</td><td class="num">{{ r.n }}</td><td class="bar-cell">{{ bar(r.w) }} <span class="small">{{ r.pct }}</span></td>
+            <td class="small">{% if r.top %}{{ r.top.title }} ({{ r.top.share }}){% else %}—{% endif %}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}{{ empty() }}{% endif %}
+    </div>
   {% endfor %}
-  </tbody>
-</table>
-{% else %}{{ empty() }}{% endif %}
+  </div>
+</section>
 
-<h2>По признакам</h2>
-{% for d in dims %}
-<h3>{{ d.title }}</h3>
-{% if d.multi %}<p class="muted small">Один результат может попасть в несколько строк.</p>{% endif %}
-{% if d.rows %}
-<table>
-  <thead><tr><th>Значение</th><th>Результатов</th><th>Доля</th><th>Чаще всего первым</th></tr></thead>
-  <tbody>
-  {% for r in d.rows %}
-    <tr><td>{{ r.label }}</td><td>{{ r.n }}</td><td class="bar-cell">{{ bar(r.w) }} <span class="small">{{ r.pct }}</span></td>
-      <td>{% if r.top %}{{ r.top.title }} ({{ r.top.share }}){% else %}—{% endif %}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% else %}{{ empty() }}{% endif %}
-{% endfor %}
+<section id="sits" class="card stats-section">
+  <h2>Типовые ситуации</h2>
+  {% if sits %}
+  <table class="clickable">
+    <thead><tr><th>Ситуация</th><th class="num">Сколько раз</th><th class="num">С семьёй</th><th>Чаще всего первым</th><th>Итоги</th></tr></thead>
+    <tbody>
+    {% for s in sits %}
+      <tr><td><a href="{{ s.url }}">{{ s.text }}</a></td><td class="num">{{ s.n }}</td><td class="num">{{ s.family }}</td>
+        <td>{% if s.top %}{{ s.top.title }} ({{ s.top.share }}){% else %}—{% endif %}</td>
+        <td>{% for c in s.chips %}<span class="badge gray chip">{{ c.label }}: {{ c.n }}</span> {% endfor %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}{{ empty() }}{% endif %}
+</section>
 
-<h2>Типовые ситуации</h2>
-{% if sits %}
-<table class="clickable">
-  <thead><tr><th>Ситуация</th><th>Сколько раз</th><th>С семьёй</th><th>Чаще всего первым</th><th>Итоги</th></tr></thead>
-  <tbody>
-  {% for s in sits %}
-    <tr><td><a href="{{ s.url }}">{{ s.text }}</a></td><td>{{ s.n }}</td><td>{{ s.family }}</td>
-      <td>{% if s.top %}{{ s.top.title }} ({{ s.top.share }}){% else %}—{% endif %}</td>
-      <td>{% for c in s.chips %}<span class="badge gray chip">{{ c.label }}: {{ c.n }}</span> {% endfor %}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% else %}{{ empty() }}{% endif %}
-
-<details class="expert">
+<details class="expert stats-section" id="audit">
   <summary>Журнал действий в админке</summary>
   <table>
     <thead><tr><th>Когда</th><th>Кто</th><th>Действие</th><th>Объект</th><th>Подробности</th></tr></thead>
