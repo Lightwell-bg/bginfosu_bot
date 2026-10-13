@@ -7,35 +7,58 @@
   <link rel="stylesheet" href="/static/admin.css">
   <script src="/static/admin.js" defer></script>
 </head>
-<body>
+<body class="{{ 'with-side' if user else 'no-side' }}">
 {% if user %}
-<header class="top">
-  <a class="brand" href="/">BGINFO · база знаний</a>
-  <nav>
-    <a href="/">Главная</a>
-    <a href="/grounds">Основания</a>
-    <a href="/params">Цифры и суммы</a>
-    <a href="/publish">Опубликовать изменения</a>
-    <a href="/history">История</a>
-    <a href="/stats">Статистика</a>
-    <details class="more">
-      <summary>Ещё ▾</summary>
-      <div class="more-list">
-        <a href="/facts">Факты</a>
-        <a href="/questions">Вопросы</a>
-        <a href="/sources">Источники</a>
-        <a href="/needs-review">Срочно: требует проверки</a>
-        <a href="/preview">Тестовая анкета</a>
-        <a href="/access">Доступ к админке</a>
-      </div>
+{# Боковое меню: разделы сгруппированы по смыслу, текущий подсвечен. #}
+{% set path = request.url.path %}
+{% macro nav_link(href, icon, text, exact=False) -%}
+  {%- set p = request.url.path -%}
+  {%- set on = (p == href) if exact else (p == href or p.startswith(href ~ '/')) -%}
+  <a href="{{ href }}" class="{{ 'on' if on }}"{% if on %} aria-current="page"{% endif %}><span class="ico" aria-hidden="true">{{ icon }}</span>{{ text }}</a>
+{%- endmacro %}
+<input type="checkbox" id="nav-toggle" class="nav-toggle" aria-hidden="true">
+<header class="mobile-bar">
+  <label for="nav-toggle" class="burger" aria-label="Меню">☰</label>
+  <a class="brand" href="/">BGINFO</a>
+</header>
+<aside class="side">
+  <a class="brand" href="/"><span class="brand-mark">BG</span><span>BGINFO<small>база знаний</small></span></a>
+  <nav aria-label="Разделы">
+    <div class="nav-group">
+      <div class="nav-title">Работа</div>
+      {{ nav_link('/', '⌂', 'Главная', exact=True) }}
+      {{ nav_link('/grounds', '▤', 'Основания') }}
+      {{ nav_link('/params', '№', 'Цифры и суммы') }}
+      {{ nav_link('/needs-review', '!', 'Срочно: требует проверки') }}
+    </div>
+    <div class="nav-group">
+      <div class="nav-title">Публикация</div>
+      {{ nav_link('/publish', '↑', 'Опубликовать изменения') }}
+      {{ nav_link('/history', '↺', 'История') }}
+    </div>
+    <div class="nav-group">
+      <div class="nav-title">Аналитика</div>
+      {{ nav_link('/stats', '▥', 'Статистика') }}
+      {{ nav_link('/preview', '▶', 'Тестовая анкета') }}
+    </div>
+    <details class="nav-group more"{% if path.startswith('/facts') or path.startswith('/questions') or path.startswith('/sources') or path.startswith('/access') %} open{% endif %}>
+      <summary class="nav-title">Ещё ▾</summary>
+      {{ nav_link('/facts', '•', 'Факты') }}
+      {{ nav_link('/questions', '?', 'Вопросы') }}
+      {{ nav_link('/sources', '§', 'Источники') }}
+      {{ nav_link('/access', '⚿', 'Доступ к админке') }}
     </details>
   </nav>
   <form method="post" action="/logout" class="logout">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <span class="muted">{{ user }}</span> <button type="submit" class="link">Выйти</button>
+    <span class="avatar" aria-hidden="true">{{ (user or '?')[:1] | upper }}</span>
+    <span class="who">{{ user }}</span>
+    <button type="submit" class="link">Выйти</button>
   </form>
-</header>
+</aside>
+<label for="nav-toggle" class="side-backdrop" aria-hidden="true"></label>
 {% endif %}
+<div class="page">
 {% if user and pending_changes %}
 <div class="pending-strip alert warn" role="status">
   <form method="post" action="/publish-now" class="inline-form">
@@ -52,5 +75,6 @@
   {% for level, text in flashes %}<div class="alert {{ 'error' if level == 'error' else 'ok' }}">{{ text }}</div>{% endfor %}
   {% block content %}{% endblock %}
 </main>
+</div>
 </body>
 </html>
