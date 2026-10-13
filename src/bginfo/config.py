@@ -84,12 +84,24 @@ class AdminConfig:
 
 
 @dataclass
+class WebappConfig:
+    host: str = "127.0.0.1"
+    port: int = 8092
+    # Публичный https-адрес мини-аппа (кнопка меню и кнопка в приветствии); пусто — мини-апп в боте не подключён
+    public_url: str = ""
+    init_data_ttl_hours: int = 24
+    # Присылать копию результата из формы в личный чат с ботом
+    send_result_to_chat: bool = True
+
+
+@dataclass
 class AppConfig:
     ai: AiConfig = field(default_factory=AiConfig)
     limits: LimitsConfig = field(default_factory=LimitsConfig)
     privacy: PrivacyConfig = field(default_factory=PrivacyConfig)
     bot: BotConfig = field(default_factory=BotConfig)
     admin: AdminConfig = field(default_factory=AdminConfig)
+    webapp: WebappConfig = field(default_factory=WebappConfig)
 
 
 def _apply_section(obj, parser: configparser.ConfigParser, section: str) -> None:
@@ -124,7 +136,7 @@ def load_config(path: str | Path | None = None) -> AppConfig:
         return cfg
     parser = configparser.ConfigParser(inline_comment_prefixes=None)
     parser.read(ini, encoding="utf-8")
-    for section in ("ai", "limits", "privacy", "bot", "admin"):
+    for section in ("ai", "limits", "privacy", "bot", "admin", "webapp"):
         _apply_section(getattr(cfg, section), parser, section)
     return cfg
 

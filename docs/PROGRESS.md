@@ -61,3 +61,7 @@
 ## Доступ к админке (2026-10-09)
 
 По решению владельца админка по умолчанию открыта напрямую по `http://IP:8091` (`network_mode: host`, `[admin] host/port` в `config.ini`, без переменных окружения). Страница «Доступ к админке» меняет host/port и перезапускает админку. Прежние переопределения host/порта через `.env` убраны.
+
+## Telegram Mini App, этап 2 (2026-10-13)
+
+Готов клиент `src/bginfo/webapp/static/` (index.html, app.css, app.js: вопросы, свободный текст, обзор, результат, универсальный экран, санитайзер HTML), `deploy/Caddyfile`, сервисы `webapp` и `caddy` в `docker-compose.yml`, документация (README, QUICK_START часть C2, DEPLOY 7a). Не проверено: docker compose config (Docker локально нет), работа клиента внутри живого Telegram; нужна A-запись `form.bginfo.eu` и свободные порты 80/443 на сервере.

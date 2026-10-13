@@ -46,6 +46,17 @@ httpx (OpenRouter), argon2-cffi (пароль админки), Docker Compose (�
 - `admin` — веб-интерфейс. По умолчанию открыт напрямую: `http://IP_СЕРВЕРА:8091` (`[admin] host = 0.0.0.0`, `port = 8091` в `config.ini`; в Docker `network_mode: host`). Защита: вход по паролю, CSRF, ограничение попыток (5 за 15 минут). Если снаружи не открывается: `sudo ufw allow 8091/tcp`. Чтобы пускать только через SSH-туннель, поставьте `host = 127.0.0.1` (страница админки «Доступ к админке» или правка `config.ini` и `docker compose restart admin`), затем: `ssh -L 8080:127.0.0.1:8091 пользователь@IP_СЕРВЕРА` и откройте `http://127.0.0.1:8080`.
 - Оба используют одну SQLite-базу (volume `/data` в Docker). Миграции применяются автоматически при старте.
 
+### Telegram Mini App (анкета в виде формы)
+
+Та же анкета и тот же расчёт, что в боте, но в виде экранов формы внутри Telegram. Сервер прогоняет тот же `engine.dialog.Dialog`, клиент (`src/bginfo/webapp/static/`, чистые HTML/CSS/JS без сборки) только рисует экраны. Сессия общая с ботом: начатое в чате продолжается в форме и наоборот. Результат показывается в форме и копией приходит в личный чат пользователя с ботом (`[webapp] send_result_to_chat`).
+
+- Сервисы: `webapp` (FastAPI, `python -m bginfo.webapp`, слушает `127.0.0.1:8092`) и `caddy` (HTTPS с сертификатом Let's Encrypt, конфиг `deploy/Caddyfile`: `form.bginfo.eu` проксируется на `127.0.0.1:8092`). Оба с `network_mode: host`.
+- DNS: создайте A-запись `form.bginfo.eu` -> `37.27.13.102`.
+- Порты 80 и 443 на сервере должны быть свободны для Caddy. Проверка: `sudo ss -ltnp | grep -E ':(80|443)\b'`. Если их держит существующий nginx или другой веб-сервер, `caddy` не запускайте; добавьте в том сервере виртуальный хост `form.bginfo.eu` с проксированием на `127.0.0.1:8092` (и запускайте `docker compose up -d --build bot admin webapp`).
+- `config.ini`, секция `[webapp]`: `host`, `port`, `public_url`, `init_data_ttl_hours`, `send_result_to_chat`. Новых переменных `.env` нет: подпись Telegram проверяется существующим `TELEGRAM_BOT_TOKEN`.
+- Бот сам ставит кнопку меню «Анкета», если задан `public_url`, и добавляет в приветствие кнопку «Заполнить в форме». Настраивать BotFather (`/setmenubutton`) не нужно.
+- Telegram открывает мини-аппы только по HTTPS, поэтому интерфейс локально можно посмотреть только через туннель (например, `cloudflared`); локально `python -m bginfo.webapp` полезен для API и тестов.
+
 ## Структура папок
 
 ```
@@ -56,9 +67,11 @@ src/bginfo/
   ai/                клиент OpenRouter, JEV-разбор текста, объяснение результата, учёт лимитов и стоимости
   kb/                модель базы знаний, проверка, выпуски (черновик/публикация/откат)
   admin/             FastAPI-админка (маршруты, шаблоны, статика)
+  webapp/            Telegram Mini App: FastAPI API (проверка initData, шаги анкеты) и статический клиент
   seed/              начальное наполнение (YAML), загрузка, сборка демо-базы
   db/                подключение SQLite и миграции
   ops/               бэкап/восстановление, проверка .env
+deploy/              Caddyfile для мини-аппа (form.bginfo.eu)
 scripts/             живые проверки OpenRouter (smoke_live.py, jev_eval.py)
 tests/               тесты (pytest), набор примеров для оценки JEV (tests/jev_eval/cases.yaml)
 docs/                документация (см. ниже)
@@ -154,6 +167,9 @@ python -m bginfo.bot
 
 # Админка на http://127.0.0.1:8091 (адрес и порт — config.ini [admin])
 python -m bginfo.admin
+
+# API мини-аппа на http://127.0.0.1:8092 (config.ini [webapp]); Telegram открывает его только по HTTPS
+python -m bginfo.webapp
 
 # Черновик рабочего наполнения в рабочую базу (DB_PATH); публикация остаётся за владельцем
 python -m bginfo.seed seed-draft            # --force заменяет существующий черновик

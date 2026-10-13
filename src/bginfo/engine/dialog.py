@@ -84,9 +84,14 @@ class Out:
     ai_notice_shown: bool = False
     delete_user: bool = False
     restart: bool = False
+    # Машиночитаемое описание экрана для мини-аппа (question | review | result); бот его игнорирует.
+    view: dict | None = None
 
     def say(self, html: str, buttons: list[list[Button]] | None = None, edit: bool = False) -> None:
+        """Добавить ответ. Экран мини-аппа (``view``) описывает последний ответ, поэтому новый ответ его
+        сбрасывает: тот, кто задаёт ``view``, делает это ПОСЛЕ своего ``say``."""
         self.replies.append(Reply(html, buttons or [], edit))
+        self.view = None
 
 
 NAV_HELP = Button("❓ Поясните вопрос", "help")
@@ -105,13 +110,18 @@ RESULT_BUTTONS = [
 
 
 class Dialog:
-    def __init__(self, interpreter, explainer, *, today, consult_enabled: bool, consult_contact: str = ""):
-        """``today`` — функция, возвращающая текущую дату в часовом поясе Болгарии."""
+    def __init__(self, interpreter, explainer, *, today, consult_enabled: bool, consult_contact: str = "",
+                 webapp_url: str | None = None):
+        """``today`` — функция, возвращающая текущую дату в часовом поясе Болгарии.
+
+        ``webapp_url`` — адрес мини-аппа: если задан, в приветствии бота появляется кнопка «Заполнить в форме».
+        """
         self.interpreter = interpreter
         self.explainer = explainer
         self.today = today
         self.consult_enabled = consult_enabled
         self.consult_contact = consult_contact
+        self.webapp_url = webapp_url
 
     # ------------------------------------------------------------------ entry
     async def handle(self, s: SessionData, ev: Event, snap: Snapshot | None, user: UserCtx) -> Out:
@@ -162,8 +172,10 @@ class Dialog:
                 btns.insert(0, [Button("Показать актуальный результат", "refresh")])
             out.say(banner + "У вас есть сохранённая анкета. Продолжим с того же места?", btns)
             return out
-        out.say(banner + P.h(P.WELCOME),
-                [[Button("Подобрать вариант", "go")], [Button("Описать ситуацию самому", "free")]])
+        rows = [[Button("Подобрать вариант", "go")], [Button("Описать ситуацию самому", "free")]]
+        if self.webapp_url:
+            rows.append([Button("📝 Заполнить в форме", "webapp")])
+        out.say(banner + P.h(P.WELCOME), rows)
         out.replies[-1].no_preview = True
         out.events.append(("session_started", ""))
         return out
@@ -183,6 +195,8 @@ class Dialog:
         if a == "resume_view":
             # устаревшая кнопка: повторно показываем актуальный шаг без изменений в анкете
             return await self._advance(s, snap, user, out)
+        if a == "show":
+            return await self._show(s, snap, user, out)
         if a == "parse_pending":
             pending = s.ui.pop("pending_text", None)
             if not pending:
@@ -197,7 +211,7 @@ class Dialog:
                     [[Button("Лучше задавайте вопросы", "asks")]])
             out.ai_notice_shown = True
             return out
-        if a in ("ans", "tog", "done", "unk"):
+        if a in ("ans", "tog", "done", "unk", "multi"):
             return await self._answer_button(s, a, arg, snap, user, out)
         if a == "help":
             q = self._current_q(s, kb)
@@ -336,6 +350,22 @@ class Dialog:
                 out.alert = "Отметьте хотя бы один пункт или «Ничего из этого»."
                 return out
             return await self._commit(s, pid, q.fact, sorted(sel), snap, user, out)
+        if a == "multi":
+            # выбор копится на клиенте (форма): значения приходят одним действием через запятую
+            if fd.type != "multi":
+                out.alert = "Кнопка устарела."
+                return out
+            vals = sorted({v.strip() for v in arg.split(",") if v.strip()})
+            if not vals:
+                out.alert = "Отметьте хотя бы один пункт или «Ничего из этого»."
+                return out
+            if not set(vals) <= {o.value for o in fd.options}:
+                out.alert = "Кнопка устарела."
+                return out
+            if "none" in vals and len(vals) > 1:
+                out.alert = "«Ничего из этого» нельзя сочетать с другими пунктами."
+                return out
+            return await self._commit(s, pid, q.fact, vals, snap, user, out)
         # ans
         if fd.type == "bool":
             if arg not in ("yes", "no"):
@@ -570,10 +600,37 @@ class Dialog:
             out.say("ℹ️ Правила в базе обновились — уточню пару моментов.")
         if step.kind == "review":
             s.state = "review"
-            out.say(P.render_profile(s.profile, kb),
-                    [[Button("✅ Всё верно — показать результат", "review_ok")], [NAV_FIX]])
-            return out
+            return self._say_review(s, kb, out)
         return self._ask(s, kb, step, out)
+
+    def _say_review(self, s: SessionData, kb: m.Bundle, out: Out) -> Out:
+        out.say(P.render_profile(s.profile, kb),
+                [[Button("✅ Всё верно — показать результат", "review_ok")], [NAV_FIX]])
+        out.view = self._review_view(s, kb)
+        return out
+
+    async def _show(self, s: SessionData, snap: Snapshot, user: UserCtx, out: Out) -> Out:
+        """Перерисовать текущий экран, не меняя анкету (восстановление мини-аппа после устаревшего экрана).
+
+        Результат не пересчитывается и не записывается, объяснитель не вызывается. Если текущий экран
+        воссоздать нельзя (нет сохранённого вида, правила обновились и т. п.), работает как ``resume_view``.
+        """
+        kb = snap.bundle
+        d = s.ui.get("last_view")
+        if s.state == "result" and d and not self._view_stale(d, snap):
+            html = P.render_result(P.view_from_dict(d))
+            out.say(html, RESULT_BUTTONS)
+            out.view = {"result": {"view": d, "html": html, "disclaimer": P.DISCLAIMER}}
+            return out
+        if s.state == "review":
+            return self._say_review(s, kb, out)
+        if s.state == "asking":
+            q = self._current_q(s, kb)
+            if q is not None:
+                return self._ask(s, kb, Step("question", question=q, participant=s.ui.get("pid", MAIN)), out)
+        if s.state == "consult_preview" and s.ui.get("consult_preview"):
+            return self._say_preview(s.ui["consult_preview"], out)
+        return await self._advance(s, snap, user, out)
 
     def _current_q(self, s: SessionData, kb: m.Bundle) -> m.Question | None:
         qid = s.ui.get("qid")
@@ -617,6 +674,7 @@ class Dialog:
         s.ui["qid"], s.ui["pid"] = q.id, pid
         today = self.today()
         text = P.question_text(q, s.profile, pid, render=lambda t: render_text(t, kb, today))
+        base_text = text
         help_text = render_text(q.help, kb, today)
         rows: list[list[Button]] = []
         if fd.type == "bool":
@@ -650,7 +708,35 @@ class Dialog:
         if nav:
             rows.append(nav)
         out.say(text, rows)
+        if fd.type == "bool":
+            view_opts = [{"value": "yes", "label": "Да"}, {"value": "no", "label": "Нет"}]
+        else:
+            view_opts = [{"value": o.value, "label": o.label} for o in fd.options]
+        cur = s.profile.get(pid, q.fact)
+        part = s.profile.participants.get(pid)
+        out.view = {"question": {
+            "qid": q.id, "pid": pid, "who": part.label if part is not None and pid not in (MAIN, CASE) else None,
+            "text_html": base_text, "help_html": P.h(help_text) if help_text else "", "type": fd.type,
+            "options": view_opts, "selected": sorted(s.ui.get("sel", [])) if fd.type == "multi" else [],
+            "allow_unknown": q.allow_unknown, "can_back": bool(s.ui.get("history")),
+            "can_fix": bool(s.profile.facts),
+            "recognized": cur is not None and cur.state is FactState.RECOGNIZED,
+            "answered": len(P.profile_lines(s.profile, kb)),
+        }}
         return out
+
+    def _review_view(self, s: SessionData, kb: m.Bundle) -> dict:
+        """Строки обзора ответов; ``index`` совпадает с ``s.ui["edit_list"]`` (действие ``edit``)."""
+        items, lines = [], []
+        for pid, key, label, val in P.profile_lines(s.profile, kb):
+            who = "Общее" if pid == CASE else s.profile.participants[pid].label if pid in s.profile.participants else None
+            index = None
+            if question_for(kb, key) is not None:
+                index = len(items)
+                items.append([pid, key])
+            lines.append({"index": index, "who": who, "label": label, "value": val})
+        s.ui["edit_list"] = items
+        return {"review": {"lines": lines}}
 
     def _edit_menu(self, s: SessionData, kb: m.Bundle, out: Out) -> Out:
         items, rows = [], []
@@ -714,6 +800,7 @@ class Dialog:
         }
         out.events.append(("result_shown", rv.explain_source))
         out.say(html, RESULT_BUTTONS)
+        out.view = {"result": {"view": view, "html": html, "disclaimer": P.DISCLAIMER}}
         return out
 
     # ------------------------------------------------------------------ consult
@@ -737,6 +824,9 @@ class Dialog:
         preview = "\n".join(lines)
         s.ui["consult_preview"] = preview
         s.state = "consult_preview"
+        return self._say_preview(preview, out)
+
+    def _say_preview(self, preview: str, out: Out) -> Out:
         out.say("Будет передано консультанту:\n\n" + preview + "\n\nОтправить?",
                 [[Button("Отправить", "consult_send"), Button("Отмена", "consult_cancel")]])
         return out

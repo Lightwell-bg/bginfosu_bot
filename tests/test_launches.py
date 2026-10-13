@@ -43,7 +43,7 @@ def test_migration_003_on_populated_001_002(tmp_path):
     conn.execute("INSERT INTO sessions(tg_user_id, created_at, updated_at) VALUES (1,'t','t')")
     conn.execute("INSERT INTO results(session_id, release_id, as_of, evaluation, message_html, explain_source,"
                  " created_at) VALUES (1,1,'a','[]','x','llm','t')")
-    assert migrate(conn) == ["003_launches.sql"]
+    assert migrate(conn) == ["003_launches.sql", "004_channel.sql"]
     u = conn.execute("SELECT * FROM users").fetchone()
     assert u["username"] is None and u["first_name"] is None and u["last_name"] is None
     r = conn.execute("SELECT * FROM results").fetchone()

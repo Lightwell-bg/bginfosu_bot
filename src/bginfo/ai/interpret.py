@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import logging
 import re
+import sqlite3
 from dataclasses import dataclass, field
 from typing import Any
 
 from bginfo.engine.facts import CASE, MAIN, Profile
 from bginfo.kb import model as m
+from bginfo.logsafe import safe_exc
 
 log = logging.getLogger(__name__)
 
@@ -357,16 +359,19 @@ class Interpreter:
             return Interpretation(ok=False, error="disabled")
         questions, index = build_questions(kb, current)
         try:
-            self.ledger.check(tg_user_id, "jev")
+            await self.ledger.acheck(tg_user_id, "jev")
         except AiError as e:
             return Interpretation(ok=False, error=e.kind)
+        except sqlite3.DatabaseError as e:  # БД учёта занята/повреждена: AI считаем недоступным
+            log.error("ai ledger unavailable: %s", safe_exc(e))
+            return Interpretation(ok=False, error="unavailable")
         try:
             answers, usage = await self.client.systemone(self.jev_model, {"user_message": text[:4000]}, questions)
-            self.ledger.record(tg_user_id, "jev", self.jev_model, usage, True)
         except AiError as e:
-            self.ledger.record(tg_user_id, "jev", self.jev_model, e.usage, False, e.kind)
+            await self._record(tg_user_id, "jev", self.jev_model, e.usage, False, e.kind)
             log.warning("jev failed: %s", e.kind)
             return Interpretation(ok=False, error=e.kind)
+        await self._record(tg_user_id, "jev", self.jev_model, usage, True)
         try:
             it = map_answers(answers, index, self.recognize_at, self.negate_at)
             if re.search(r"\d", text) and it.intent in ("new_info", "correction", "answer_current"):
@@ -376,6 +381,13 @@ class Interpreter:
             return Interpretation(ok=False, error="invalid")
         return it
 
+    async def _record(self, tg_user_id: int | None, kind: str, model: str, usage, ok: bool, error: str = "") -> None:
+        """Запись в ledger; сбой БД учёта только логируется (вызов к провайдеру уже состоялся)."""
+        try:
+            await self.ledger.arecord(tg_user_id, kind, model, usage, ok, error)
+        except sqlite3.DatabaseError as e:
+            log.error("ai ledger record failed: %s", safe_exc(e))
+
     async def _amounts(self, text: str, kb: m.Bundle, tg_user_id: int | None) -> list[Recognized]:
         from bginfo.ai.openrouter import AiError
 
@@ -383,8 +395,10 @@ class Interpreter:
         if not money:
             return []
         try:
-            self.ledger.check(tg_user_id, "extract")
-        except AiError:
+            await self.ledger.acheck(tg_user_id, "extract")
+        except (AiError, sqlite3.DatabaseError) as e:
+            if not isinstance(e, AiError):
+                log.error("ai ledger unavailable: %s", safe_exc(e))
             return []
         sys = (
             "Извлеки из сообщения пользователя только явно названные суммы денег. Не додумывай. "
@@ -398,10 +412,10 @@ class Interpreter:
                 [{"role": "system", "content": sys}, {"role": "user", "content": text[:2000]}],
                 AMOUNT_SCHEMA, "amounts", max_tokens=300, temperature=0,
             )
-            self.ledger.record(tg_user_id, "extract", self.llm_model, usage, True)
         except AiError as e:
-            self.ledger.record(tg_user_id, "extract", self.llm_model, e.usage, False, e.kind)
+            await self._record(tg_user_id, "extract", self.llm_model, e.usage, False, e.kind)
             return []
+        await self._record(tg_user_id, "extract", self.llm_model, usage, True)
         out = []
         for a in data.get("amounts", []) if isinstance(data, dict) else []:
             try:

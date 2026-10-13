@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import html as htmllib
 import re
+import sqlite3
 from datetime import timedelta
 from html.parser import HTMLParser
 from typing import ClassVar
@@ -544,8 +545,39 @@ BAD_EXPLANATIONS = {
 @pytest.fixture
 def ledger(tmp_path):
     conn = open_db(tmp_path / "ledger.db")
-    yield AiLedger(conn, 100.0, {})
-    conn.close()
+    led = AiLedger(conn, 100.0, {})
+    yield led
+    led.close()
+
+
+class _BrokenLedger:
+    """Ledger, у которого БД учёта недоступна (занята/повреждена)."""
+
+    async def acheck(self, *a):
+        raise sqlite3.OperationalError("database is locked")
+
+    async def arecord(self, *a, **k):
+        raise sqlite3.OperationalError("database is locked")
+
+
+async def test_ledger_db_error_explain_falls_back_to_template():
+    client = FakeClient(_expl())
+    r = Run(explainer=Explainer(client, _BrokenLedger(), model="fake"))
+    await r.result(PENSIONER)
+    assert client.calls == 0  # учёт недоступен: к модели не ходим
+    assert r.out.result_record["explain_source"] == "template"
+    assert "Что стоит проверить первым" in r.out.replies[-1].html
+
+
+async def test_ledger_record_error_does_not_break_explain():
+    class RecordBroken(_BrokenLedger):
+        async def acheck(self, *a):
+            return None
+
+    client = FakeClient(_expl(why="Пенсия 900 евро в месяц у вас есть."))
+    r = Run(explainer=Explainer(client, RecordBroken(), model="fake"))
+    await r.result(PENSIONER)
+    assert client.calls == 1 and r.out.result_record["explain_source"] == "llm"
 
 
 @pytest.mark.parametrize("name", sorted(BAD_EXPLANATIONS))

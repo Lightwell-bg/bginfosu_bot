@@ -16,7 +16,7 @@ def launches(conn: sqlite3.Connection, page: int, per_page: int = 50, since: dat
 
     Возвращает {"rows": [...], "total": int, "page": int (после ограничения 1..pages), "pages": int (>=1),
     "per_page": int}. Строка: session_id, started_at (UTC iso), tg_user_id, username, first_name, last_name,
-    state ("result" | "in_progress" | "abandoned"), results_count, last_result_at, result_kind,
+    channel ("bot" | "webapp"), state ("result" | "in_progress" | "abandoned"), results_count, last_result_at, result_kind,
     primary_ground, primary_status, release_id (последний результат сессии; при его отсутствии None),
     details_source ("result" | "session_view" | "missing").
 
@@ -35,7 +35,7 @@ def launches(conn: sqlite3.Connection, page: int, per_page: int = 50, since: dat
     sess = conn.execute(
         """
         SELECT s.id AS session_id, s.created_at AS started_at, s.tg_user_id,
-               u.username, u.first_name, u.last_name, s.status AS _status, s.updated_at AS _updated, s.ui AS _ui
+               u.username, u.first_name, u.last_name, s.channel, s.status AS _status, s.updated_at AS _updated, s.ui AS _ui
           FROM sessions s
           LEFT JOIN users u ON u.tg_user_id = s.tg_user_id
          WHERE s.created_at >= ?
@@ -85,6 +85,7 @@ def launches(conn: sqlite3.Connection, page: int, per_page: int = 50, since: dat
         rows.append({
             "session_id": r["session_id"], "started_at": r["started_at"], "tg_user_id": r["tg_user_id"],
             "username": r["username"], "first_name": r["first_name"], "last_name": r["last_name"],
+            "channel": r["channel"],
             "state": state, "results_count": n,
             "last_result_at": res["created_at"] if res is not None else None,
             "result_kind": kind, "primary_ground": ground, "primary_status": status,

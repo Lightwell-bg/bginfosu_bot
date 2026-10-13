@@ -112,3 +112,27 @@ def test_cleanup_drops_old_rate_counters(conn):
     repo.cleanup(conn, 90)
     assert [r[0] for r in conn.execute("SELECT day FROM rate_counters")] != ["2000-01-01"]
     assert conn.execute("SELECT COUNT(*) FROM rate_counters").fetchone()[0] == 1
+
+
+async def test_async_check_record_run_off_loop_and_pair(conn):
+    import threading
+
+    led = AiLedger(conn, 10.0, {"jev": 1})
+    threads = []
+    real = led.reserve
+
+    def spy(*a, **k):
+        threads.append(threading.current_thread())
+        return real(*a, **k)
+
+    led.reserve = spy
+    await led.acheck(1, "jev")
+    await led.arecord(1, "jev", "m", usage(0.2), True)
+    assert threads and threads[0] is not threading.main_thread()
+    row = conn.execute("SELECT status, ok, cost_usd FROM ai_calls").fetchone()
+    assert (row["status"], row["ok"], row["cost_usd"]) == ("done", 1, 0.2)  # резерв закрыт, не вставлена вторая строка
+    assert conn.execute("SELECT COUNT(*) FROM ai_calls").fetchone()[0] == 1
+    with pytest.raises(AiError) as e:
+        await led.acheck(1, "jev")
+    assert e.value.kind == "limit"
+    led._exec.shutdown(wait=True)

@@ -29,7 +29,7 @@ dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-bginfo = ["admin/templates/*.html", "admin/static/*", "db/migrations/*.sql", "seed/*.yaml", "seed/grounds/*.yaml"]
+bginfo = ["admin/templates/*.html", "admin/static/*", "webapp/static/*", "db/migrations/*.sql", "seed/*.yaml", "seed/grounds/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

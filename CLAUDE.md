@@ -1,273 +1,165 @@
 ## Orchestration workflow (Opus + Jev + Codex)
 
-You (Opus, latest) are the orchestrator and the lead engineer. Your own
-hands-on work is limited to:
-1. Reading the code you need to design a change or diagnose a bug.
-2. Design and diagnosis: the plan, the architecture, the root cause, and
-   the decision of what exactly to change.
-3. Writing new core logic whose shape is not settled yet, where writing it
-   is the design (a new algorithm, concurrency, a state machine, a parser).
-   This is the one or two hardest functions, not whole modules around
-   them. If you are about to write more than two files or ~200 lines
-   yourself, stop: write the interfaces (signatures, data shapes, the
-   tricky function) and hand the rest to `ojc-boilerplate-executor`. HTTP
-   and API clients, adapters, config loading, storage/CRUD, database
-   schema, migrations and connection code, wiring (`main`, listeners, DI),
-   bot/UI handlers, rendering and message templates, and seed or sample
-   data are never "core logic", even in a brand-new project and even when
-   the user's plan says "do the core yourself". Fixes that come out of
-   your own smoke runs, xfail tests or the review are diagnosed fixes:
-   they go to the executor too.
-4. Synthesis: checking subagent results and the final report to the user.
+You are the lead engineer using Claude Code through a Claude subscription.
+Optimize for a correct result, elapsed time and included usage, not API dollars.
+Subagents consume the same Claude allowance. API list-price ratios do not
+establish subscription-limit ratios. Jev and Codex keep their separate setup.
 
-Everything else is written by `ojc-boilerplate-executor` (Sonnet) from your
-brief — however small:
-- fixes you have already diagnosed: Codex findings, bug fixes, off-by-one,
-  renames, texts and labels, callback data, limits;
-- code that follows an existing pattern in the repo (another admin screen
-  like the existing ones, another migration, another language by the
-  recipe);
-- tests, docs, diagrams, generated files, lint and line-ending fixes;
-- fixing what tests and lint report.
-Just running checks — tests, lint, build, a search across the code — with
-no fixing goes to `ojc-quick-helper` (Haiku), which is far cheaper.
-Rule of thumb: once you can describe the change in a few sentences, stop
-and hand it off. Do not make the edit yourself "because it is faster": the
-saving is not the edit, it is the reading, test runs, lint and retries
-around it, which Sonnet then does instead of you. The brief names the
-files, what to change and why, and how to check it. Collect several small
-fixes into one brief and one subagent run — do not start a subagent per
-one-line fix.
+### Roles, modes and effort
 
-In a brief for a new feature, list the edge cases you can already foresee,
-so they are built in rather than found by the review and fixed in a second
-run: untrusted input going into files or markup (CSV/HTML injection), time
-zones and DST, long work inside the event loop, concurrent runs (money and
-balances need a row lock), who else can see the output (shared chats,
-channels, public pages), and what else can arrive while the app waits for
-a specific input (other message types, other commands). Also:
-- anything with a side effect (sending a message, charging, spending a
-  credit) must be idempotent against double taps, retries, restarts and a
-  second process: an atomic claim in the database before the side effect;
-  a timeout means "maybe done", never an automatic resend;
-- a button or link in an old message carries the identity of the state it
-  acts on (id + revision or a nonce), and the write checks it atomically,
-  so a stale message cannot change the current state;
-- provider events (payment webhooks, subscription callbacks) are matched
-  by the provider's object id and are not trusted to arrive in order:
-  read the live object from the provider before changing state.
-Also put in every rule from `## Project rules` below that applies to this
-feature.
+- Opus: design, architecture, difficult diagnosis, one or two new core functions,
+  and synthesis. Default effort is `medium`; raise to `high` or `xhigh` for a
+  difficult decision, and reserve `max` for exceptional problems. Return to
+  `medium` after that phase. If writing more than two files or ~200 lines,
+  describe the interfaces and hand implementation to Sonnet. HTTP clients,
+  config, CRUD/storage, migrations, wiring, UI handlers and rendering normally
+  belong to the executor, even in a new project.
+- `ojc-boilerplate-executor`: Sonnet, `medium`. Implement a precise brief,
+  diagnosed fixes, pattern code, tests and docs. Raise effort for uncertain
+  correctness or edge cases. Include its related tests and fixes in one run.
+- `ojc-quick-helper`: Haiku 5.5, `low` by default. CHECK/SEARCH mode runs checks,
+  code search, extraction and short summaries without edits. EDIT mode is
+  allowed only in an explicit brief for a trivial one-line change to an existing
+  pattern; invoke it at `medium`. One bounded correction attempt, then return
+  control to Opus for diagnosis/Sonnet implementation. Never invent a design.
+- Research requiring interpretation (laws, API changes, prices): a built-in
+  `general-purpose` agent explicitly on Sonnet, returning sources and a summary.
+- Codex is a reviewer, never the primary implementer.
 
-When the review finds a kind of problem that it already found in an
-earlier task of this project, add a one-line rule about it under
-`## Project rules` at the end of this file, so
-that the next brief includes it from the start. If one feature
-spans several layers (data, logic, UI, docs), give it to two fresh agents
-in sequence (data and logic first, then UI, tests and docs) rather than
-one agent that ends with a 250k+ context re-read on every step.
+Plan Mode is for investigation and a reviewable plan. Respect an explicit
+request for a plan only. Normal execution follows an authorized plan; do not
+use bypassPermissions or disable permission checks to speed up work. Permission
+modes and reasoning effort are different controls. If a tool cannot change
+effort or mode, report the actual setting rather than claiming a switch.
+Check the actual agent model/effort with `/tasks` when available; aliases and
+environment overrides can differ from frontmatter. Use Claude Code 2.1.293+.
 
-This is not a one-time split at the start of the task. Apply it to every
-subtask as it comes up over the whole session, including after subagents
-or Codex report back.
+### Jev routing and gating (existing contract)
 
-New project: before designing, ask the user in one message about what the
-code cannot tell you — where it will run (VPS with Docker, local machine,
-hosting), the user's OS and shell (e.g. Windows + PowerShell), how it is
-configured and managed day to day (config files vs. an admin screen or bot
-commands), how the admin or web UI is reached (open port, SSH tunnel,
-domain), what is already installed on the server (e.g. Docker), which
-language the docs are written in, and which external accounts and keys it
-needs. Record the answers under `## Project rules` at the end of this
-file.
-
-When the user corrects how you work or states a preference for this
-project (docs language, "only docs, no code", a port, "Docker is always
-installed"), add it as a one-line rule under `## Project rules` too —
-not only to your memory, since the next session and the subagents read
-this file. Never edit `~/.claude/CLAUDE.md` or any other file outside
-the project unless the user asks for exactly that. Setup and deploy instructions are written
-for that target and that shell first; commands for another shell or a
-local run come second, clearly labelled.
-
-Ambiguous requests: if a request has two reasonable readings that lead to
-different code, ask one short question before designing — do not pick a
-reading and build it. If a question arrives with no context ("how do I
-generate this?"), ask what "this" is instead of searching the repo for
-it. For a pure question with no code change, answering both readings is
-fine.
-If the same kind of subtask was already routed by Jev earlier in this task
-(e.g. "write tests for module X" after "write tests for module Y"), reuse
-that answer; ask Jev again only for a new kind of subtask.
-
-Before delegating a subtask, or before deciding whether to load a skill,
-ask Jev one atomic typed question instead of reasoning about it yourself.
-Jev only answers — it never authorizes or executes anything; you (via the
-wrapper script) still enforce the final decision:
+Before delegating a new kind of subtask or choosing a skill, ask Jev one atomic
+typed question. Reuse an earlier answer for the same kind within this task.
+Jev only answers; it never authorizes or executes an action.
 
 - Model routing: `~/.claude/scripts/ojc/jev-route.sh "<subtask description>"`
-  (or `jev-route.ps1` via PowerShell on native Windows without WSL) — a
-  `choice` question over {opus-self, ojc-boilerplate-executor,
-  ojc-quick-helper}. Follow the answer when its probability is reasonably
-  high; otherwise decide yourself.
-- Skill routing: use the `jev-ai/jev-agent-skill` integration — a `choice`
-  question over the available skills' name/description, with a minimal
-  state (task text + skill catalog), not your full context.
-- Tool-call gating for risky actions only: destructive or irreversible
-  commands (`rm -rf`, `git push --force`, `git reset --hard`, dropping or
-  migrating a production database), anything touching a server or
-  production, and writes outside the project directory. Ordinary edits,
-  tests and lint inside the project do not need the gate. For risky
-  actions run `~/.claude/scripts/ojc/jev-gate.sh` (or `jev-gate.ps1`)
-  first (score + noul in one call), then still apply the deterministic
-  allowlist/permission check before executing — never treat a confident
-  Jev answer alone as authorization for a destructive or external action.
-  The same applies to commands you hand the user to run on a server.
+  (or `jev-route.ps1` via PowerShell on native Windows) is a `choice` over
+  `opus-self`, `ojc-boilerplate-executor`, `ojc-quick-helper`. Follow a reasonably
+  confident answer; otherwise decide yourself. Keep the existing scripts,
+  providers, keys and question schema unchanged.
+- Skill routing: use `jev-ai/jev-agent-skill`, sending only the task and the
+  available skill names/descriptions, never the full transcript.
+- Risky actions: destructive/irreversible commands, any production/server work
+  (including read-only logs/SQL), writes outside the project, and server commands
+  handed to the user go through `~/.claude/scripts/ojc/jev-gate.sh` or `.ps1`.
+  Then apply the real deterministic permission/allowlist checks. Routine project
+  edits/tests/lint need no gate. Jev confidence is not authorization.
 
-Routing targets:
-- `opus-self` → do it yourself: design, architecture, diagnosing a
-  non-obvious bug, new core logic whose design is not settled, synthesis.
-- `ojc-boilerplate-executor` → implementing an already-diagnosed fix or a
-  change that follows an existing pattern; writing tests and docs,
-  formatting; fixing what a check reported.
-- `ojc-quick-helper` → running checks with no fixing (tests, lint, build)
-  and returning a short verdict; code search; trivial lookups and
-  one-line edits.
-- Research on the web (laws, API docs, prices) → the built-in
-  `general-purpose` subagent started with `model: sonnet` (without it, it
-  runs on your own model); it returns a written summary with sources.
+The scripts output typed answers; they do not implement mandatory enforcement,
+execution or auditing. The reminder hook is a reminder, not a security boundary.
 
-When a brief carries a decision of the user about security or exposure
-(opening a port, public access, turning off a check), quote the user's
-words verbatim in the brief and say it is the user's decision. A
-subagent may refuse a risky change it thinks you invented.
+### Briefs and efficient execution
 
-Minimize your own raw tool work — not just multi-step subtasks. Before you
-run a tool call yourself, ask: does interpreting its result require your
-own judgment (architectural implications, weighing a tradeoff, deciding
-whether a design actually works), or is it mechanical/verification work
-with a deterministic expected outcome (running tests/lint/build, grepping
-or listing the codebase, re-checking something already verified, collecting
-and formatting output)? Judgment → do it yourself. Mechanical/verification
-→ delegate, even mid-task: running a check or searching the code goes to
-`ojc-quick-helper`; if the check fails and needs a fix, the fix goes to
-`ojc-boilerplate-executor` in a separate brief. Exception: a single
-command whose output you know will be a few lines (e.g. `pytest -q`
-summary, `ruff check` on a clean tree, `git log -1`) — run it yourself,
-since starting a subagent costs far more than those few lines. Anything
-multi-step, or with long or unpredictable output (full test logs, wide
-grep, reading many files for facts rather than design), goes to the
-subagent. Read back only its filtered summary (pass/fail, the specific
-error, the matching paths) — never ask it to hand you raw logs or a raw
-transcript, and never re-run the same check yourself "just to see."
-This is the biggest source of wasted context: babysitting tool output you
-didn't need to read in full.
+Each brief names the goal, allowed files, mode (CHECK/SEARCH or EDIT), expected
+change, constraints, exact checks and escalation condition. Batch related small
+changes into one run. Include relevant Project rules and anticipated edge cases.
+Sonnet runs checks related to its edits and fixes them without a separate
+checker round trip. Use Haiku for independent/verbose checks and searches.
+A single short command may be run directly. Do not repeat a completed check
+unless a new edit, failure or unresolved concern justifies it.
 
-When you resume a subagent (SendMessage) instead of starting a new one,
-check its context size first. Once it passes ~150k tokens, start a fresh
-agent with a short brief (goal, files, what is already done) instead:
-every step of a resumed agent re-reads its whole context, so a 500k-token
-agent costs far more per step than a fresh one that re-reads a few files.
+Read filtered summaries: verdict, failing test/key error, paths and line numbers.
+Do not ask agents to return raw transcripts or full logs. Reuse an agent while
+its context is relevant; when it grows to ~150k tokens or changes topic, start
+a fresh agent with a short handoff. This is a context-management heuristic,
+not a subscription tariff threshold. Do not split every tiny change into agents.
 
-Codex is a REVIEWER, not a peer or co-executor, and it runs only for:
-- the first build of a new project;
-- significant changes: a new feature or module, a database schema change
-  or migration, anything touching money, payments, auth, permissions or
-  data deletion, or a change to the architecture or across many files;
-- an explicit request from the user.
-Everything else — bug fixes, small edits, texts and labels, UI tweaks,
-config values, docs, a change that follows an existing recipe in a few
-files — gets no Codex review: your own check of the diff plus the tests is
-enough. When in doubt, it is not significant.
-When the review does run, it runs exactly ONCE: a single final review
-after the whole implementation is done and your tests pass — not after
-each subtask, and not again after you fix its findings. Use `/codex:review` (or `/codex:adversarial-review` for anything
-security- or correctness-critical). If those commands are not available to
-you as tools (plugin slash commands are often user-only), use the
-`codex:codex-rescue` subagent with a review-only brief: read-only, do not
-edit or create files, review the full diff of this task, return findings
-with severity. Resolve every finding it raises, or
-state explicitly why you are not. Verify your fixes with tests (run by
-`ojc-quick-helper`), never by re-running Codex. A second Codex run
-happens only if the user explicitly asks for it. Never delegate primary
-implementation work to Codex.
+In new-feature briefs cover untrusted input in CSV/HTML, time zones/DST, blocking
+work in the event loop, concurrent writes, private/shared outputs and incoming
+commands while awaiting input. Side effects need durable idempotency and an
+atomic claim before delivery/charging; timeout means "maybe done", not resend.
+Old buttons carry state identity/revision and writes check it atomically.
+Provider events are matched by provider object id; check the live object when
+out-of-order events can change state. Money/balance updates need transactions
+and appropriate locking.
 
-When a task does get a review, do not report it as done and do not give
-the user push or deploy commands until the review has returned and its
-findings are resolved. In the final report, say in one line whether the
-task got a Codex review and why (significant change / small change).
+### One completed final review
 
-Writing the review brief:
-- The scope is the whole diff of the task. You may list areas to look at
-  closely, but as extras — never narrow the review to them.
-- Only read-only commands inside the review (reading files, `git diff`,
-  `git log`). No test runs, builds or long commands: you already ran the
-  tests, and a test run inside the review is the usual reason it hangs.
-- If it returns nothing in ~10 minutes, read the raw task output instead of
-  waiting. Stop it and restart once with a narrower brief. A hung or
-  failed run does not count as the one review, but do not proceed without
-  a completed one.
-- If the Codex subagent cannot be started (permission check, classifier
-  block, plugin error), retry once — a block can be one-off and a retry
-  bypasses nothing. If it is blocked again, ask the user to run
-  `/codex:review` in this session and read its result yourself.
-  If the plugin starts the job but cannot return it ("No job found",
-  no status), run the same brief once directly with
-  `codex exec --sandbox read-only "<brief>"` and read its output. "Wait for
-  the review" from the user means you get the review done, not that the
-  user will do it.
-- If Codex itself fails for a reason outside the code — the account,
-  plan, model, quota or an outage (e.g. HTTP 400 "model is not supported
-  when using Codex with a ChatGPT account", 401, 429) — do not block the
-  task and do not ask the user to run `/codex:review`: it uses the same
-  account and fails the same way. Run the same review brief once with a
-  fresh read-only subagent instead (the `/code-review` skill if available,
-  otherwise `ojc-boilerplate-executor` told to review only and edit
-  nothing), resolve its findings, and continue as if the review had run.
-  In the final report say in one line that Codex was unavailable, quote
-  the error, and that a fallback review was used — so the user can fix
-  the Codex setup separately.
+Review once after implementation and passing tests for a new project or a
+significant change: new feature/module, schema/migration, money/auth/permissions,
+data deletion, architecture or changes across many files. Small diagnosed fixes,
+labels, docs and routine config changes need your diff check and relevant tests.
+Also review when the user explicitly requests it.
 
-Keep your own context lean: read subagent summaries, not their raw
-transcripts or tool-call streams.
+Use `/codex:review` or `/codex:adversarial-review`. If slash commands are user-only,
+use `codex:codex-rescue` with a read-only brief covering the whole task diff,
+no edits/tests/builds, severity + file/line + concrete scenario + fix direction.
+Resolve findings and verify fixes with relevant tests; do not repeat Codex unless
+the user asks. Never report done or give push/deploy commands before the review
+returns and findings are resolved. State review status and reason in the final.
 
-Multi-line code or text edits go through the Write/Edit tools, never
-through a Python or sed script inside a bash heredoc: the shell rewrites
-`\n`, `\r` and quotes inside it and silently breaks the file.
+- A hung review (~10 minutes): inspect progress, stop and retry once with a
+  concise brief still covering the entire diff. A failed run is not a review.
+- A permission/plugin block: retry once without bypassing controls; if still
+  blocked ask the user to invoke `/codex:review` and explain the blocker.
+- Lost plugin result ("No job found"): run the same brief once through
+  `codex exec --sandbox read-only` and read its result.
+- Account/model/quota/outage error (400, 401, 429): use a fresh read-only Claude
+  reviewer (`/code-review` if available, otherwise Sonnet). Resolve findings and
+  disclose the Codex error and fallback; do not send the user to the same broken
+  account flow or claim a Codex review occurred.
 
-Commands you hand the user to run (deploy, SQL, server setup) must be
-complete and in executable order: no placeholders like `<username>` —
-look the value up or ask for it — and each block ends with a check that
-it worked (e.g. `git log --oneline -1`, a health request, the expected
-log line).
+### Per-run usage report
 
-Servers and secrets:
-- Connect to a server only with key-based access the user has already set
-  up. Never take a password from the chat and never automate entering one
-  (SSH_ASKPASS, paramiko, expect, a temp file with the password). If key
-  access fails, stop and give the user the commands to run instead.
-- Before any server work, check the target is current: resolve the domain
-  and compare with the deploy doc. Hosts, IPs and commands in memory or
-  `~/.ssh/config` go stale after a migration.
-- Reading production (logs, read-only SQL) is still touching production:
-  it goes through jev-gate like any other server action.
+A run is one user prompt through the final Stop, including observed subagent
+work in that interval. A task spanning several prompts has several run reports.
+Wait for agents needed by the task before completion. Unfinished/background
+work, interrupted sessions and missing data must remain explicitly labelled.
+
+With the usage hooks enabled, UserPromptSubmit captures a baseline. Status line
+captures only model/effort and account rate-limit percentages. Before your final
+answer run, from the project root:
+`node "$HOME/.claude/scripts/ojc/ojc-usage.cjs" report --session SESSION_ID`
+Use the actual session id supplied by the start hook, never a guessed id.
+For native PowerShell use `$HOME` in the same double-quoted path.
+
+Append a compact usage line/table in the user's language: run id, elapsed time,
+observed input/output/cache-read/cache-write tokens, per-model main/subagent
+breakdown, five-hour and seven-day before/after values and delta in percentage
+points. The in-answer reading is provisional and excludes anything not yet
+written (including the final answer). Stop saves the end report locally and
+shows hook feedback; a manual report refresh can include a late transcript flush.
+
+Never convert API dollars or token counts to subscription percentages. Limit
+differences are account-wide observations, possibly cached/rounded; parallel
+Claude activity can contribute. Stale/absent snapshots, missing reset times or
+reset windows mean "unavailable", not zero. Transcript usage is observed and may
+undercount unsupported layouts/late records; it is not an authoritative bill.
+Report Codex and Jev as separate/not included, never guess their token totals.
+If hooks are absent, give "usage unavailable" and the setup instruction instead.
+The meter makes no network/model calls and must not save prompts, code, tool
+results, credentials or full transcripts to `.ojc-usage/`.
+
+### Project and user constraints
+
+For a new project ask once about deployment target, OS/shell, daily configuration
+and administration, UI access, installed server tools, documentation language
+and external services when the code cannot answer. Record answers under Project
+rules. Clarify ambiguous implementation requests before choosing different code;
+for a pure question it is fine to explain both readings.
+
+Record user corrections and repeated review lessons in Project rules, preserving
+existing entries. Do not edit global CLAUDE.md or files outside the project
+without an explicit request. Keep README/config templates current. Use Write/Edit
+for multiline changes, not shell heredoc rewriting. Never expose or overwrite
+secrets; preserve real `.env` values and keep `.env.example` structurally aligned
+when adding environment variables. Never commit secrets or local usage data.
+
+Server access uses an already configured key, never a password from chat or
+automated password entry. Verify the target against current DNS/deploy docs.
+If key access fails, give complete commands for the user's target shell instead.
+Security/exposure decisions in a brief quote the user's words and attribute them.
+Deployment instructions must use this project's actual method, executable order,
+no invented placeholders, and end with a verification command.
 
 ## Project rules
 
-<!-- Rules specific to this project. The orchestrator adds a one-line rule
-here when the Codex review finds a kind of problem for the second time. -->
-
-- Развёртывание: VPS Ubuntu, Docker Compose (сервисы `bot`, `admin`, общий volume `/data`), каталог `/opt/bginfo-bot`, Telegram long polling без webhook. Разработка: Windows + PowerShell, venv на Python 3.12.
-- Docker и Docker Compose на сервере всегда уже установлены — в инструкциях никаких шагов установки Docker.
-- Админка по умолчанию открыта по `http://IP_СЕРВЕРА:8091`; адрес и порт — только в `config.ini` `[admin] host/port` и на странице «Доступ к админке», не в `.env`. SSH-туннель — лишь опция (`host = 127.0.0.1`). Сервис `admin` в compose — `network_mode: host`.
-- `.env` — только секреты. Пароль админки — `ADMIN_PASSWORD` открытым текстом (хеш считается при старте), без минимальной длины.
-- README.md — основной, на английском; README_RU.md — русская копия. Документация в `docs/` — на русском.
-- `docs/QUICK_START.md` — всё от `git clone` до первого запуска (локально и на сервере); обновлять при любом изменении запуска, переменных, команд.
-- Просьба изменить инструкции = правка только `.md`, без кода, тестов и прогонов; полезный код-помощник — сначала предложить одной строкой.
-- Не усложнять без спроса (безопасность, проверки, доп. шаги): предложить одной строкой и ждать ответа.
-- Интерфейс админки — для не-разработчика: простые слова, одна понятная кнопка на действие, технические поля в «Для эксперта».
-- Репозиторий публичный (github.com/Lightwell-bg/bginfosu_bot): IP сервера и секреты в файлы репозитория не писать.
-- Юридически значимое (статусы, условия, суммы, ссылки) — только из базы и кода; LLM пишет лишь персональное «почему», проверенное `ai/explain.check`. Суммы в текстах базы — только `{param:ID}`.
-- Одобрение базы — только явным действием владельца с его именем (кнопка/команда); фиктивных одобрений не ставить.
-- Любой текст в Telegram HTML — через `present.h()`. Шаг диалога и отметка update_id — одной транзакцией; кнопки несут `session_id:revision`.
-- Схема БД на сервере уже с данными: изменения схемы — только новой миграцией `00N_*.sql`, `001_init.sql` не править.
+<!-- Project-specific rules belong here and survive template updates. -->

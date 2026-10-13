@@ -19,7 +19,7 @@
 {% endmacro %}
 {% if rows %}
 <table>
-  <thead><tr><th>Когда</th><th>Кто</th><th>Анкета</th><th>Подобрано</th><th>Результатов</th><th>Последний результат</th></tr></thead>
+  <thead><tr><th>Когда</th><th>Кто</th><th>Канал</th><th>Анкета</th><th>Подобрано</th><th>Результатов</th><th>Последний результат</th></tr></thead>
   <tbody>
   {% for r in rows %}
     <tr>
@@ -27,6 +27,7 @@
       <td>{{ r.name }}<br>
         {% if r.username %}{% if r.link %}<a href="{{ r.link }}" target="_blank" rel="noopener">@{{ r.username }}</a>{% else %}@{{ r.username }}{% endif %}{% else %}<span class="muted">без username</span>{% endif %}
         <br><span class="muted small">id {{ r.tg_user_id }}</span></td>
+      <td>{{ r.channel }}</td>
       <td><span class="badge {{ r.state_cls }}">{{ r.state_label }}</span></td>
       <td>{% if r.picked and r.picked.missing %}<span class="muted">{{ r.picked.title }}</span>{% elif r.picked %}{{ r.picked.title }}{% if r.picked.status %} <span class="chip-st {{ r.picked.cls }}">{{ r.picked.status }}</span>{% endif %}{% else %}—{% endif %}</td>
       <td>{{ r.results_count }}</td>

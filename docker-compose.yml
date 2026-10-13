@@ -36,6 +36,29 @@ services:
       retries: 3
       start_period: 15s
 
+  webapp:
+    <<: *common
+    command: ["python", "-m", "bginfo.webapp"]
+    # слушает 127.0.0.1:8092 ([webapp] в config.ini), наружу только через caddy
+    network_mode: host
+    healthcheck:
+      # порт 8092 совпадает с [webapp] port в config.ini; при смене порта поправьте и здесь, и в deploy/Caddyfile
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8092/healthz', timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    # нужны свободные порты 80/443 на сервере (Let's Encrypt)
+    network_mode: host
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
   backup:
     <<: *common
     restart: "no"
@@ -44,3 +67,5 @@ services:
 
 volumes:
   bginfo_data:
+  caddy_data:
+  caddy_config:

@@ -46,6 +46,17 @@ Details about the requests: [PROMPTS.md](PROMPTS.md) (Russian).
 - `admin` is a web interface. By default it is reachable directly at `http://SERVER_IP:8091` (`[admin] host = 0.0.0.0`, `port = 8091` in `config.ini`; in Docker it uses `network_mode: host`). Protection: password login, CSRF, login attempt limit (5 per 15 minutes). If the port is not reachable from outside: `sudo ufw allow 8091/tcp`. To restrict access to an SSH tunnel only, set `host = 127.0.0.1` (admin page "Admin access" or edit `config.ini` and run `docker compose restart admin`), then: `ssh -L 8080:127.0.0.1:8091 user@SERVER_IP` and open `http://127.0.0.1:8080`.
 - Both use one SQLite database (volume `/data` in Docker). Migrations are applied automatically on start.
 
+### Telegram Mini App (questionnaire as a form)
+
+The same questionnaire and calculation as in the bot, shown as form screens inside Telegram. The server runs the same `engine.dialog.Dialog`, the client (`src/bginfo/webapp/static/`, plain HTML/CSS/JS, no build) only draws the screens. The session is shared with the bot: what was started in the chat continues in the form and back. The result is shown in the form and also sent as a copy to the user's private chat with the bot (`[webapp] send_result_to_chat`).
+
+- Services: `webapp` (FastAPI, `python -m bginfo.webapp`, listens on `127.0.0.1:8092`) and `caddy` (HTTPS with a Let's Encrypt certificate, config in `deploy/Caddyfile`: `form.bginfo.eu` proxied to `127.0.0.1:8092`). Both use `network_mode: host`.
+- DNS: create an A record `form.bginfo.eu` -> `37.27.13.102`.
+- Ports 80 and 443 on the server must be free for Caddy. Check: `sudo ss -ltnp | grep -E ':(80|443)\b'`. If an existing nginx or another web server holds them, do not start `caddy`; add a virtual host for `form.bginfo.eu` in that server that proxies to `127.0.0.1:8092` (and run `docker compose up -d --build bot admin webapp`).
+- `config.ini`, section `[webapp]`: `host`, `port`, `public_url`, `init_data_ttl_hours`, `send_result_to_chat`. No new `.env` variables: the Telegram signature check uses the existing `TELEGRAM_BOT_TOKEN`.
+- The bot sets the "Анкета" menu button itself when `public_url` is set, and adds the "Fill in the form" button to the welcome message. Configuring BotFather (`/setmenubutton`) is not needed.
+- Telegram opens Mini Apps only over HTTPS, so the UI can be tried locally only through a tunnel (for example `cloudflared`); locally `python -m bginfo.webapp` is useful for the API and tests.
+
 ## Folder structure
 
 ```
@@ -56,9 +67,11 @@ src/bginfo/
   ai/                OpenRouter client, JEV text parsing, result explanation, limits and cost accounting
   kb/                knowledge base model, validation, releases (draft/publish/rollback)
   admin/             FastAPI admin (routes, templates, static files)
+  webapp/            Telegram Mini App: FastAPI API (initData check, questionnaire steps) and static client
   seed/              initial content (YAML), loader, demo database builder
   db/                SQLite connection and migrations
   ops/               backup/restore, .env check
+deploy/              Caddyfile for the Mini App (form.bginfo.eu)
 scripts/             live OpenRouter checks (smoke_live.py, jev_eval.py)
 tests/               tests (pytest), JEV evaluation cases (tests/jev_eval/cases.yaml)
 docs/                documentation (see below)
@@ -154,6 +167,9 @@ python -m bginfo.bot
 
 # Admin at http://127.0.0.1:8091 (address and port: config.ini [admin])
 python -m bginfo.admin
+
+# Mini App API at http://127.0.0.1:8092 (config.ini [webapp]); Telegram opens it only over HTTPS
+python -m bginfo.webapp
 
 # Draft of the working content into the working database (DB_PATH); publishing stays with the owner
 python -m bginfo.seed seed-draft            # --force replaces an existing draft

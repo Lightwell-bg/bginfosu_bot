@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from bginfo.engine.dialog import Button
 
@@ -116,10 +116,20 @@ def callback_data(session_id: int, revision: int, action: str, arg: str = "") ->
     return head + arg
 
 
-def keyboard(buttons: list[list[Button]], session_id: int, revision: int) -> InlineKeyboardMarkup:
-    rows = [
-        [InlineKeyboardButton(text=b.text[:64], callback_data=callback_data(session_id, revision, b.action, b.arg))
-         for b in row]
-        for row in buttons if row
-    ]
+def _button(b: Button, session_id: int, revision: int, webapp_url: str | None) -> InlineKeyboardButton | None:
+    if b.action == "webapp":
+        # кнопка открытия мини-аппа: без callback; без адреса мини-аппа её нет
+        if not webapp_url:
+            return None
+        return InlineKeyboardButton(text=b.text[:64], web_app=WebAppInfo(url=webapp_url))
+    return InlineKeyboardButton(text=b.text[:64], callback_data=callback_data(session_id, revision, b.action, b.arg))
+
+
+def keyboard(buttons: list[list[Button]], session_id: int, revision: int,
+             webapp_url: str | None = None) -> InlineKeyboardMarkup:
+    rows = []
+    for row in buttons:
+        made = [x for x in (_button(b, session_id, revision, webapp_url) for b in row) if x is not None]
+        if made:
+            rows.append(made)
     return InlineKeyboardMarkup(inline_keyboard=rows)

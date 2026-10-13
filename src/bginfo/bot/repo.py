@@ -139,16 +139,19 @@ def new_session(conn: sqlite3.Connection, tg_user_id: int) -> SessionData:
     return SessionData(sid, 0, "start", profile, {}, None)
 
 
-def insert_session_in_tx(conn: sqlite3.Connection, tg_user_id: int, s: SessionData, revision: int) -> None:
-    """Сделать ``s`` новой активной сессией (прежние активные -> abandoned); проставляет ``s.id``."""
+def insert_session_in_tx(conn: sqlite3.Connection, tg_user_id: int, s: SessionData, revision: int,
+                         channel: str = "bot") -> None:
+    """Сделать ``s`` новой активной сессией (прежние активные -> abandoned); проставляет ``s.id``.
+
+    ``channel`` — где начата анкета: ``bot`` | ``webapp``."""
     now = _now()
     conn.execute("UPDATE sessions SET status='abandoned', updated_at=? WHERE tg_user_id=? AND status='active'",
                  (now, tg_user_id))
     cur = conn.execute(
-        "INSERT INTO sessions(tg_user_id, status, state, revision, profile, ui, release_id, created_at, updated_at)"
-        " VALUES (?, 'active', ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO sessions(tg_user_id, status, state, revision, profile, ui, release_id, created_at, updated_at,"
+        " channel) VALUES (?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)",
         (tg_user_id, s.state, revision, json.dumps(s.profile.to_dict(), ensure_ascii=False),
-         json.dumps(s.ui, ensure_ascii=False), s.release_id, now, now),
+         json.dumps(s.ui, ensure_ascii=False), s.release_id, now, now, channel),
     )
     s.id = cur.lastrowid
 
@@ -193,11 +196,12 @@ def _stats_day(record: dict) -> str:
 def add_result_in_tx(conn: sqlite3.Connection, session_id: int, record: dict) -> None:
     conn.execute(
         "INSERT INTO results(session_id, release_id, as_of, evaluation, message_html, explain_source, created_at,"
-        " result_kind, primary_ground, primary_status) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        " result_kind, primary_ground, primary_status, channel) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (session_id, record["release_id"], record["as_of"],
          json.dumps(record["evaluation"], ensure_ascii=False), record["message_html"],
          record["explain_source"], _now(),
-         record.get("result_kind"), record.get("primary_ground"), record.get("primary_status")),
+         record.get("result_kind"), record.get("primary_ground"), record.get("primary_status"),
+         record.get("channel", "bot")),
     )
     # обезличенная статистика: без id пользователя и сессии, только дата (без времени), не чистится при /delete
     conn.execute(
@@ -265,7 +269,7 @@ def commit_step(conn: sqlite3.Connection, *, update_id: int | None, tg_user_id: 
                 events: list[tuple[str, str]] | None = None, ai_notice: bool = False,
                 delete_user: bool = False, new_session: bool = False,
                 replaces: tuple[int, int] | None = None, consult_html: str | None = None,
-                info: dict | None = None) -> str:
+                info: dict | None = None, channel: str = "bot", expect_no_active: bool = False) -> str:
     """Все записи одного шага диалога в ОДНОЙ транзакции.
 
     Порядок: пометка update_id (дубль) -> сессия (обновление с проверкой ревизии либо вставка новой) ->
@@ -280,6 +284,10 @@ def commit_step(conn: sqlite3.Connection, *, update_id: int | None, tg_user_id: 
     ``consult_html`` — текст заявки; запись pending в той же транзакции. ``info`` (если передан)
     получает ``consult_id`` (None — заявка по сессии уже есть).
     ``update_id=None`` — шаг не привязан к update Telegram (пометка пропускается).
+    ``channel`` — канал новой сессии (``bot`` | ``webapp``), пишется только при ``new_session``.
+    ``expect_no_active=True`` (вместе с ``new_session``) — сессия создаётся лишь потому, что активной не
+    было на момент загрузки: если за это время другой процесс (бот/форма) уже создал активную, это
+    ``conflict`` и ничего не помечается abandoned. Явный рестарт этот флаг не ставит.
     """
     original_id = session.id
     try:
@@ -291,7 +299,9 @@ def commit_step(conn: sqlite3.Connection, *, update_id: int | None, tg_user_id: 
                     cur = active_session(conn, tg_user_id)
                     if cur is None or (cur.id, cur.revision) != replaces:
                         raise _Abort("conflict")
-                insert_session_in_tx(conn, tg_user_id, session, expected_revision + (1 if bump else 0))
+                elif expect_no_active and active_session(conn, tg_user_id) is not None:
+                    raise _Abort("conflict")
+                insert_session_in_tx(conn, tg_user_id, session, expected_revision + (1 if bump else 0), channel)
             elif not save_session_in_tx(conn, session, expected_revision, bump):
                 raise _Abort("conflict")
             if result_record:

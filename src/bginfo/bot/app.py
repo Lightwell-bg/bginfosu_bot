@@ -27,22 +27,16 @@ from typing import Any
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.exceptions import (
-    TelegramBadRequest,
-    TelegramEntityTooLarge,
-    TelegramForbiddenError,
-    TelegramMigrateToChat,
-    TelegramNotFound,
-    TelegramUnauthorizedError,
-)
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, LinkPreviewOptions, Message, Update
+from aiogram.types import CallbackQuery, LinkPreviewOptions, MenuButtonWebApp, Message, Update, WebAppInfo
 
 from bginfo.ai.explain import Explainer
 from bginfo.ai.interpret import Interpreter
 from bginfo.ai.ledger import AiLedger
 from bginfo.ai.openrouter import OpenRouterClient
 from bginfo.bot import repo
+from bginfo.bot.delivery import DUPLICATE, FAILED, MSG_LIMIT, SENT, deliver_consult
 from bginfo.bot.render import keyboard, split_html
 from bginfo.config import AppConfig, Settings, get_config, get_settings
 from bginfo.db.conn import open_db
@@ -53,8 +47,6 @@ from bginfo.logsafe import safe_exc
 log = logging.getLogger(__name__)
 
 CLEANUP_PERIOD_S = 6 * 3600
-CONSULT_TIMEOUT_S = 15
-MSG_LIMIT = 4000
 
 TXT_STALE = "Эта кнопка устарела"
 TXT_NO_SESSION = "Анкета не найдена. Отправьте /start, чтобы начать."
@@ -76,11 +68,6 @@ TXT_CONSULT_FAIL = "Не удалось отправить, попробуйте
 TXT_CONSULT_UNKNOWN = "Не удалось подтвердить отправку. Возможно, заявка дошла — консультант свяжется."
 TXT_CONSULT_UNKNOWN_CONTACT = " Если ответа нет, напишите: "
 TXT_CONSULT_OFF = "Онлайн-заявка на консультацию пока не настроена."
-
-# Ошибки Telegram, после которых сообщение ТОЧНО не доставлено (можно повторить вручную). Всё остальное
-# (таймаут, сеть, 5xx, flood-wait, неизвестное) — «возможно доставлено»: статус unknown, автоповтора нет.
-_NOT_DELIVERED = (TelegramBadRequest, TelegramForbiddenError, TelegramUnauthorizedError, TelegramNotFound,
-                  TelegramEntityTooLarge, TelegramMigrateToChat)
 
 # Состояние обработки текущего update (ставит middleware, читают run/_run_locked):
 # {"id": update_id, "done": шаг закоммичен вместе с пометкой update_id, "failed": обработчик упал}.
@@ -213,13 +200,13 @@ class BotApp:
 
     def _commit(self, uid: int, s: SessionData, expected: int, bump: bool, out: Out, update_id: int | None,
                 new_session: bool, replaces: tuple[int, int] | None, consult_html: str | None,
-                info: dict) -> str:
+                info: dict, expect_no_active: bool = False) -> str:
         """Одна транзакция на весь шаг: ``"ok"`` | ``"duplicate"`` | ``"conflict"`` (см. ``repo.commit_step``)."""
         return repo.commit_step(
             self.conn, update_id=update_id, tg_user_id=uid, session=s, expected_revision=expected, bump=bump,
             result_record=out.result_record, events=list(out.events), ai_notice=out.ai_notice_shown,
             delete_user=out.delete_user, new_session=new_session, replaces=replaces,
-            consult_html=consult_html, info=info)
+            consult_html=consult_html, info=info, expect_no_active=expect_no_active)
 
     # ------------------------------------------------------------------ main flow
     async def run(self, tg_user, ev: Event, *, message: Message | None = None,
@@ -277,10 +264,14 @@ class BotApp:
         before = _fingerprint(s)
         expected = s.revision
         replaces: tuple[int, int] | None = None
+        # сессия создаётся только потому, что активной не было (не явный /restart): при гонке с другим
+        # процессом commit_step вернёт conflict, а не пометит чужую свежую сессию abandoned
+        expect_no_active = is_new and not fresh
         out = await self.dialog.handle(s, ev, snap, user)
         if out.restart:
             replaces = (s.id, s.revision) if s.id is not None else None
             s, is_new, expected, before = repo.blank_session(), True, 0, None
+            expect_no_active = False
             out = await self.dialog.handle(s, Event("start"), snap, user)
         bump = (before is None or _fingerprint(s) != before or out.result_record is not None
                 or out.consult is not None or out.delete_user)
@@ -289,7 +280,7 @@ class BotApp:
             consult_html = out.consult.get("html", "")
         info: dict = {}
         status = await self.db(self._commit, uid, s, expected, bump, out, update_id, is_new, replaces,
-                               consult_html, info)
+                               consult_html, info, expect_no_active)
         if status == "duplicate":
             log.info("duplicate update skipped at commit")
             if step is not None:
@@ -319,7 +310,7 @@ class BotApp:
 
     async def _send(self, out: Out, chat_id: int, callback: CallbackQuery | None, sid: int, rev: int) -> None:
         for reply in out.replies:
-            markup = keyboard(reply.buttons, sid, rev) if reply.buttons else None
+            markup = keyboard(reply.buttons, sid, rev, self.dialog.webapp_url) if reply.buttons else None
             msg = callback.message if callback is not None else None
             lpo = LinkPreviewOptions(is_disabled=True) if reply.no_preview else None
             if reply.edit and msg is not None and len(reply.html) <= MSG_LIMIT:
@@ -354,32 +345,20 @@ class BotApp:
     async def _consult(self, html: str, uid: int, chat_id: int, sid: int, rev: int, cid: int | None) -> None:
         """Отправить заявку, уже записанную (pending) в транзакции шага; ``cid=None`` — заявка уже есть.
 
-        Исходы: sent; failed (Telegram точно отказал, ничего не доставлено: можно повторить вручную);
+        Исходы (см. ``bot.delivery``): sent; failed (Telegram точно отказал, можно повторить вручную);
         unknown (таймаут, сеть, flood-wait, неизвестная ошибка или хотя бы одна часть уже ушла: возможно
         доставлено, повторная отправка заблокирована индексом).
         """
-        chat = self.settings.CONSULT_CHAT_ID
-        if cid is None:
-            await self._consult_say(TXT_CONSULT_DUP, chat_id, sid, rev)
-            return
-        parts_sent = 0
-        try:
-            async with asyncio.timeout(CONSULT_TIMEOUT_S):
-                for chunk in split_html(html, MSG_LIMIT):
-                    await self.bot.send_message(chat, chunk)
-                    parts_sent += 1
-        except Exception as e:  # noqa: BLE001 - исход классифицируем ниже
-            log.error("consult send failed: %s", safe_exc(e))
-            definite = parts_sent == 0 and isinstance(e, _NOT_DELIVERED)
-            status = "failed" if definite else "unknown"
-            await self.db(repo.mark_consult, self.conn, cid, status)
-            await self.db(repo.add_event, self.conn, f"consult_{status}", sid, type(e).__name__)
-            await self._consult_say(TXT_CONSULT_FAIL if definite else self._consult_unknown_text(),
-                                    chat_id, sid, rev)
-            return
-        await self.db(repo.mark_consult, self.conn, cid, "sent")
-        await self.db(repo.add_event, self.conn, "consult_sent", sid, "")
-        await self._consult_say(TXT_CONSULT_OK, chat_id, sid, rev)
+        status = await deliver_consult(self.bot, self.conn, self.db, self.settings.CONSULT_CHAT_ID, html, sid, cid)
+        if status == DUPLICATE:
+            text = TXT_CONSULT_DUP
+        elif status == SENT:
+            text = TXT_CONSULT_OK
+        elif status == FAILED:
+            text = TXT_CONSULT_FAIL
+        else:
+            text = self._consult_unknown_text()
+        await self._consult_say(text, chat_id, sid, rev)
 
     # ------------------------------------------------------------------ background
     async def cleanup_loop(self) -> None:
@@ -409,12 +388,11 @@ def _parse_callback(data: str) -> tuple[int, int, str, str] | None:
 # --------------------------------------------------------------------------- assembly
 
 
-def build_app(settings: Settings | None = None, config: AppConfig | None = None, *, bot: Bot | None = None,
-              interpreter=None, explainer=None) -> BotApp:
-    """Собрать приложение. ``bot``, ``interpreter`` и ``explainer`` можно подменить (тесты)."""
-    settings = settings or get_settings()
-    config = config or get_config()
-    conn = open_db(settings.DB_PATH)
+def build_ai(settings: Settings, config: AppConfig, interpreter=None, explainer=None):
+    """(interpreter, explainer, closers): реальные Interpreter/Explainer, если не подменены (тесты).
+
+    Общая сборка для бота и мини-аппа: тот же ``Explainer``, те же лимиты и бюджет.
+    """
     closers: list[Callable[[], Any]] = []
     if interpreter is None or explainer is None:
         client = None
@@ -424,23 +402,34 @@ def build_app(settings: Settings | None = None, config: AppConfig | None = None,
                                       timeout_s=ai.timeout_s, retries=ai.retries, app_title=ai.app_title,
                                       http_referer=ai.http_referer)
             closers.append(client.aclose)
-        # Отдельное соединение: Interpreter вызывает ledger синхронно из event loop, а
-        # основное соединение занято executor-потоком (транзакции не должны перемешиваться).
+        # Отдельное соединение со своим однопоточным executor (AiLedger.acheck/arecord): основное
+        # соединение занято потоком шагов диалога (транзакции не должны перемешиваться).
         ledger_conn = open_db(settings.DB_PATH)
-        closers.append(ledger_conn.close)
         lim = config.limits
         ledger = AiLedger(ledger_conn, lim.daily_budget_usd,
                           {"jev": lim.user_text_per_day, "extract": lim.user_text_per_day,
                            "explain": lim.user_explain_per_day},
                           unknown_cost_usd=lim.unknown_cost_usd)
+        closers.append(ledger.close)
         interpreter = interpreter or Interpreter(
             client, ledger, jev_model=config.ai.jev_model, llm_model=config.ai.llm_model,
             recognize_at=config.ai.jev_recognize_threshold, negate_at=config.ai.jev_negation_threshold)
         explainer = explainer or Explainer(client, ledger, model=config.ai.llm_model,
                                            max_tokens=config.ai.explain_max_tokens)
+    return interpreter, explainer, closers
+
+
+def build_app(settings: Settings | None = None, config: AppConfig | None = None, *, bot: Bot | None = None,
+              interpreter=None, explainer=None) -> BotApp:
+    """Собрать приложение. ``bot``, ``interpreter`` и ``explainer`` можно подменить (тесты)."""
+    settings = settings or get_settings()
+    config = config or get_config()
+    conn = open_db(settings.DB_PATH)
+    interpreter, explainer, closers = build_ai(settings, config, interpreter, explainer)
     dialog = Dialog(interpreter, explainer, today=today_in(config.bot.timezone),
                     consult_enabled=settings.CONSULT_CHAT_ID is not None,
-                    consult_contact=config.bot.consult_contact)
+                    consult_contact=config.bot.consult_contact,
+                    webapp_url=config.webapp.public_url.strip() or None)
     if bot is None:
         token = settings.TELEGRAM_BOT_TOKEN.get_secret_value() if settings.TELEGRAM_BOT_TOKEN else ""
         bot = Bot(token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -449,6 +438,17 @@ def build_app(settings: Settings | None = None, config: AppConfig | None = None,
 
 def demo_release_in_production(settings: Settings, snap: Snapshot | None) -> bool:
     return settings.APP_MODE == "production" and snap is not None and snap.bundle.demo
+
+
+async def _set_menu_button(app: BotApp) -> None:
+    """Кнопка меню «Анкета» открывает мини-апп; ошибка только логируется (бот работает и без неё)."""
+    url = app.dialog.webapp_url
+    if not url:
+        return
+    try:
+        await app.bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Анкета", web_app=WebAppInfo(url=url)))
+    except Exception as e:  # noqa: BLE001
+        log.error("set menu button failed: %s", safe_exc(e))
 
 
 async def main() -> None:
@@ -468,6 +468,7 @@ async def main() -> None:
             log.error("A webhook is configured for this bot, polling would conflict with it. "
                       "See docs/SWITCHOVER.md")
             return
+        await _set_menu_button(app)
         cleanup_task = asyncio.create_task(app.cleanup_loop())
         await app.dp.start_polling(app.bot, allowed_updates=["message", "callback_query"])
     finally:

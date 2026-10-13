@@ -259,7 +259,8 @@ def stats_launches(request: Request, page: str | None = None, period: str | None
         rows.append({
             "when": _local(r["started_at"], st.tz), "name": name, "username": uname,
             "link": f"https://t.me/{uname}" if uname and USERNAME_RE.match(uname) else None,
-            "tg_user_id": r["tg_user_id"], "state_label": label, "state_cls": cls, "picked": picked,
+            "tg_user_id": r["tg_user_id"], "channel": "Форма" if r.get("channel") == "webapp" else "Бот",
+            "state_label": label, "state_cls": cls, "picked": picked,
             "results_count": r["results_count"], "last_result": _local(r["last_result_at"], st.tz),
         })
     p, pages = data["page"], data["pages"]

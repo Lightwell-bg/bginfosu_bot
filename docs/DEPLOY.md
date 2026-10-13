@@ -140,6 +140,48 @@ sudo systemctl status caddy --no-pager | head -5
 3. Пересобрать и перезапустить: `docker compose build && docker compose up -d`.
 4. Проверка: `curl -sI "https://${ADMIN_DOMAIN}/login" | head -1` (ожидается `HTTP/2 200`). Для HTTPS через Caddy поставьте `host = 127.0.0.1` в `config.ini` и не открывайте порт 8091 наружу.
 
+## 7a. Мини-апп Telegram (форма) на form.bginfo.eu
+
+Сервисы `webapp` (API и клиент, `127.0.0.1:8092`) и `caddy` (HTTPS, сертификат Let's Encrypt) уже описаны в `docker-compose.yml`; конфиг Caddy — `deploy/Caddyfile`. Новых переменных `.env` нет. Это отдельно от пункта 7 (Caddy на хосте для админки): не запускайте оба Caddy одновременно, порты 80/443 одни.
+
+1. DNS: у регистратора домена `bginfo.eu` создайте A-запись `form.bginfo.eu` -> `37.27.13.102` и дождитесь, пока она станет видна:
+
+   ```bash
+   dig +short form.bginfo.eu
+   ```
+
+   Ожидается: `37.27.13.102`.
+
+2. Порты 80 и 443 должны быть свободны:
+
+   ```bash
+   sudo ss -ltnp | grep -E ':(80|443)\b'
+   ```
+
+   Пустой вывод — свободны. Если их держит nginx, Caddy из пункта 7 или другой веб-сервер, сервис `caddy` из compose не запускайте: добавьте в существующий веб-сервер виртуальный хост `form.bginfo.eu` с `proxy_pass`/`reverse_proxy` на `127.0.0.1:8092`, а контейнеры поднимайте командой `docker compose up -d --build bot admin webapp`. При необходимости откройте порты: `sudo ufw allow 80/tcp && sudo ufw allow 443/tcp`.
+
+3. Запуск (в `config.ini` секция `[webapp]` уже содержит `public_url = https://form.bginfo.eu`):
+
+   ```bash
+   cd /opt/bginfo-bot
+   git pull
+   docker compose up -d --build
+   docker compose ps
+   ```
+
+   Ожидается: `webapp` `(healthy)`, `caddy` `Up`. Бот при старте сам ставит кнопку меню «Анкета».
+
+4. Проверка:
+
+   ```bash
+   curl -s http://127.0.0.1:8092/healthz
+   curl -sI https://form.bginfo.eu | head -1
+   ```
+
+   Ожидается: `{"ok":true}` и `HTTP/2 200`. Дальше откройте бота в Telegram и нажмите кнопку меню «Анкета».
+
+Логи: `docker compose logs --tail=100 webapp caddy`. Порт 8092 указан в `[webapp] port` (`config.ini`), `deploy/Caddyfile` и healthcheck в `docker-compose.yml`; при смене порта поправьте все три места.
+
 ## 8. Логи, состояние, проверка
 
 ```bash

@@ -601,3 +601,57 @@ async def test_handler_error_log_has_no_exception_text(env, caplog):
     with caplog.at_level(logging.ERROR):
         await d.send("hello")
     assert "ValueError" in caplog.text and secret not in caplog.text
+
+
+# --------------------------------------------------------------------------- гонка первой сессии (кросс-процесс)
+
+
+def test_commit_step_expect_no_active_conflicts_without_abandoning(tmp_path):
+    conn = open_db(tmp_path / "race.db")
+    repo.touch_user(conn, 7)
+    mine = repo.blank_session()  # «загрузили»: активной сессии не было
+    other = repo.new_session(conn, 7)  # другой процесс успел создать активную
+    res = repo.commit_step(conn, update_id=None, tg_user_id=7, session=mine, expected_revision=0, bump=True,
+                           new_session=True, expect_no_active=True)
+    assert res == "conflict" and mine.id is None
+    assert repo.active_session(conn, 7).id == other.id
+    assert conn.execute("SELECT COUNT(*) FROM sessions WHERE status='abandoned'").fetchone()[0] == 0
+    # явный рестарт (без флага) по-прежнему заменяет активную
+    assert repo.commit_step(conn, update_id=None, tg_user_id=7, session=mine, expected_revision=0, bump=True,
+                            new_session=True) == "ok"
+    assert repo.active_session(conn, 7).id == mine.id
+    # активной нет — флаг ничему не мешает
+    repo.touch_user(conn, 8)
+    s8 = repo.blank_session()
+    assert repo.commit_step(conn, update_id=None, tg_user_id=8, session=s8, expected_revision=0, bump=True,
+                            new_session=True, expect_no_active=True) == "ok"
+    conn.close()
+
+
+async def test_bot_start_creates_session_normally(env):
+    app, _session, d = env
+    await d.send("/start")
+    assert d.session_row() is not None and d.session_row().state == "start"
+    n = app.conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+    await d.send("/restart")  # явный рестарт заменяет активную сессию
+    assert app.conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == n + 1
+    assert app.conn.execute("SELECT COUNT(*) FROM sessions WHERE status='active'").fetchone()[0] == 1
+
+
+async def test_bot_first_session_race_sends_conflict_and_keeps_other(env):
+    app, _session, d = env
+    real = app._load
+
+    def racing(*a, **k):
+        res = real(*a, **k)
+        other = open_db(app.settings.DB_PATH)  # «другой процесс» создаёт сессию между загрузкой и коммитом
+        repo.new_session(other, UID)
+        other.close()
+        return res
+
+    app._load = racing
+    await d.send("/start")
+    app._load = real
+    assert TXT_CONFLICT in d.sent_texts()
+    assert app.conn.execute("SELECT COUNT(*) FROM sessions WHERE status='abandoned'").fetchone()[0] == 0
+    assert app.conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 1

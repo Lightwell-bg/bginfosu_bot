@@ -1,5 +1,6 @@
 """Регрессионные тесты по замечаниям ревью: каждый воспроизводит сценарий сбоя."""
 
+import sqlite3
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -44,10 +45,10 @@ def test_map_answers_skips_non_numeric_probabilities_per_question():
 
 
 class _Ledger:
-    def check(self, *a):
+    async def acheck(self, *a):
         pass
 
-    def record(self, *a, **k):
+    async def arecord(self, *a, **k):
         pass
 
 
@@ -301,3 +302,21 @@ def test_general_flag_after_partial_disputes_all_requirements(conn):
     p.confirm_value(CASE, "has_housing", True, "t", None)
     res = evaluate_all(snap.bundle, p, TODAY).get("pensioner")
     assert res.status is Status.INDIVIDUAL
+
+
+# --------------------------------------------------------------------------- AI-ledger: сбой БД учёта
+
+
+class _BrokenLedger:
+    async def acheck(self, *a):
+        raise sqlite3.OperationalError("database is locked")
+
+    async def arecord(self, *a, **k):
+        raise sqlite3.OperationalError("database is locked")
+
+
+async def test_interpret_ledger_db_error_means_ai_unavailable():
+    client = _Client({})
+    it = Interpreter(client, _BrokenLedger(), jev_model="m", llm_model="m")
+    res = await it.interpret("текст", KB, None, 1)
+    assert res.ok is False and res.error == "unavailable"

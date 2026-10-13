@@ -19,12 +19,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import secrets
 import sqlite3
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from bginfo.ai.openrouter import AiError, AiUsage
 from bginfo.db.conn import iso, utcnow, write_tx
@@ -61,6 +65,17 @@ class AiLedger:
         self._limits = per_user_daily
         self._unknown = unknown_cost_usd
         self._salt: str | None = None
+        # Собственный однопоточный executor: sqlite-вызовы ledger не блокируют event loop (async-методы
+        # ``acheck``/``arecord``), а соединение ledger остаётся единственным у этого потока.
+        self._exec = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ai-ledger")
+
+    def close(self) -> None:
+        """Остановить executor и закрыть соединение ledger."""
+        self._exec.shutdown(wait=True)
+        self._conn.close()
+
+    async def _run(self, fn: Callable[..., Any], *args: Any) -> Any:
+        return await asyncio.get_running_loop().run_in_executor(self._exec, fn, *args)
 
     # ------------------------------------------------------------------ helpers
     def _salt_value(self) -> str:
@@ -141,12 +156,29 @@ class AiLedger:
     # ------------------------------------------------------------------ совместимый API: check / record
     def check(self, tg_user_id: int | None, kind: str) -> None:
         """Проверка + резерв (см. модульный docstring). AiError("budget") / AiError("limit")."""
-        call_id = self.reserve(tg_user_id, kind, "")
+        self._remember(tg_user_id, kind, self.reserve(tg_user_id, kind, ""))
+
+    def _remember(self, tg_user_id: int | None, kind: str, call_id: int) -> None:
         pending = _PENDING.get()
         if pending is None:
             pending = {}
             _PENDING.set(pending)
         pending[(id(self), tg_user_id, kind)] = call_id
+
+    async def acheck(self, tg_user_id: int | None, kind: str) -> None:
+        """``check`` без блокировки event loop: БД-вызов идёт в executor ledger, ``call_id`` запоминается
+        в контексте вызывающей задачи (executor контекст не наследует)."""
+        self._remember(tg_user_id, kind, await self._run(self.reserve, tg_user_id, kind, ""))
+
+    async def arecord(self, tg_user_id: int | None, kind: str, model: str, usage: AiUsage | None, ok: bool,
+                      error: str = "") -> None:
+        """``record`` без блокировки event loop (см. ``acheck``)."""
+        call_id = self._take(tg_user_id, kind)
+        await self._run(self._finish, call_id, tg_user_id, kind, model, usage, ok, error)
+
+    def _take(self, tg_user_id: int | None, kind: str) -> int | None:
+        pending = _PENDING.get()
+        return pending.pop((id(self), tg_user_id, kind), None) if pending else None
 
     def record(
         self,
@@ -157,8 +189,10 @@ class AiLedger:
         ok: bool,
         error: str = "",
     ) -> None:
-        pending = _PENDING.get()
-        call_id = pending.pop((id(self), tg_user_id, kind), None) if pending else None
+        self._finish(self._take(tg_user_id, kind), tg_user_id, kind, model, usage, ok, error)
+
+    def _finish(self, call_id: int | None, tg_user_id: int | None, kind: str, model: str,
+                usage: AiUsage | None, ok: bool, error: str = "") -> None:
         if call_id is not None:
             self.settle(call_id, usage, ok, error, model)
             return

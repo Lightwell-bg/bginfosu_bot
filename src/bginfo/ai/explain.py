@@ -18,8 +18,10 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sqlite3
 
 from bginfo.engine.result import GroundView, ResultView
+from bginfo.logsafe import safe_exc
 
 log = logging.getLogger(__name__)
 
@@ -192,6 +194,13 @@ class Explainer:
         self.model = model
         self.max_tokens = max_tokens
 
+    async def _record(self, tg_user_id: int | None, kind: str, usage, ok: bool, error: str = "") -> None:
+        """Запись в ledger; сбой БД учёта только логируется (вызов к провайдеру уже состоялся)."""
+        try:
+            await self.ledger.arecord(tg_user_id, kind, self.model, usage, ok, error)
+        except sqlite3.DatabaseError as e:
+            log.error("ai ledger record failed: %s", safe_exc(e))
+
     async def explain(self, rv: ResultView, profile_lines: list[tuple[str, str]], all_titles: list[str],
                       tg_user_id: int | None) -> ResultView:
         """Дописать персональные пояснения; при любой проблеме — проверенный шаблон."""
@@ -202,8 +211,11 @@ class Explainer:
             return rv
         payload = build_payload(rv, profile_lines)
         try:
-            self.ledger.check(tg_user_id, "explain")
+            await self.ledger.acheck(tg_user_id, "explain")
         except AiError:
+            return rv
+        except sqlite3.DatabaseError as e:  # БД учёта занята/повреждена: проверенный шаблон
+            log.error("ai ledger unavailable: %s", safe_exc(e))
             return rv
         try:
             data, usage = await self.client.chat_json(
@@ -213,7 +225,7 @@ class Explainer:
                 SCHEMA, "explanation", max_tokens=self.max_tokens, temperature=0.2,
             )
         except AiError as e:
-            self.ledger.record(tg_user_id, "explain", self.model, e.usage, False, e.kind)
+            await self._record(tg_user_id, "explain", e.usage, False, e.kind)
             log.warning("explain failed: %s", e.kind)
             return rv
         try:
@@ -221,7 +233,7 @@ class Explainer:
         except Exception:  # noqa: BLE001
             problems = ["structure"]
         codes = ",".join(problems)[:100]
-        self.ledger.record(tg_user_id, "explain", self.model, usage, not problems, codes)
+        await self._record(tg_user_id, "explain", usage, not problems, codes)
         if problems:
             log.warning("explain rejected: %s", codes)
             return rv

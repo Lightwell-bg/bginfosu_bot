@@ -496,7 +496,49 @@ docker compose ps
 curl -s http://127.0.0.1:8091/healthz   # порт: [admin] port в config.ini
 ```
 
-Ожидается: `bot` и `admin` в состоянии `Up`, `admin` `(healthy)`, ответ `{"ok":true}`. Если в `.env.example` добавились переменные, внесите их в серверный `.env` до `up -d` (проверка в [DEPLOY.md](DEPLOY.md), раздел 9). Перед обновлением полезен разовый бэкап (часть B, шаг 15).
+Ожидается: `bot`, `admin`, `webapp` в состоянии `Up`, `admin` и `webapp` `(healthy)`, ответ `{"ok":true}`. Если в `.env.example` добавились переменные, внесите их в серверный `.env` до `up -d` (проверка в [DEPLOY.md](DEPLOY.md), раздел 9). Перед обновлением полезен разовый бэкап (часть B, шаг 15).
+
+---
+
+## Часть C2. Мини-апп Telegram (форма) на form.bginfo.eu
+
+Новых переменных `.env` нет.
+
+1. У регистратора домена создайте A-запись `form.bginfo.eu` -> `37.27.13.102`. Проверка на сервере:
+
+   ```bash
+   dig +short form.bginfo.eu
+   ```
+
+   Ожидается: `37.27.13.102`.
+
+2. Проверьте, что порты 80 и 443 свободны (пустой вывод — свободны).
+
+   ```bash
+   sudo ss -ltnp | grep -E ':(80|443)\b'
+   ```
+
+   Если их держит nginx или другой веб-сервер, `caddy` не запускайте: проксируйте `form.bginfo.eu` на `127.0.0.1:8092` в нём и используйте `docker compose up -d --build bot admin webapp` (см. [DEPLOY.md](DEPLOY.md), пункт 7a).
+
+3. Выкатите и проверьте.
+
+   ```bash
+   cd /opt/bginfo-bot && git pull
+   docker compose up -d --build
+   docker compose ps
+   curl -s http://127.0.0.1:8092/healthz
+   curl -sI https://form.bginfo.eu | head -1
+   ```
+
+   Ожидается: `webapp` `(healthy)`, `caddy` `Up`, `{"ok":true}`, `HTTP/2 200`. В боте появится кнопка меню «Анкета».
+
+4. Локально (Windows, PowerShell, venv активирован) API мини-аппа запускается так:
+
+   ```powershell
+   python -m bginfo.webapp
+   ```
+
+   Ожидается: сервер на `http://127.0.0.1:8092`, `http://127.0.0.1:8092/healthz` отвечает `{"ok":true}`. Telegram открывает мини-аппы только по HTTPS, поэтому интерфейс локально смотрится через HTTPS-туннель (например, `cloudflared tunnel --url http://127.0.0.1:8092`, его адрес временно вписать в `[webapp] public_url`); без туннеля проверяйте API тестами: `pytest tests/test_webapp_api.py`.
 
 ---
 
