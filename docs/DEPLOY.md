@@ -158,10 +158,10 @@ sudo ln -sf /etc/nginx/sites-available/form.bginfo.eu /etc/nginx/sites-enabled/f
 sudo nginx -t && sudo systemctl reload nginx
 certbot --version || sudo apt-get install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d form.bginfo.eu --redirect
-curl -sI https://form.bginfo.eu | head -1
+curl -s https://form.bginfo.eu/healthz
 ```
 
-Ожидается: `{"ok":true}` после `healthz` и `HTTP/2 200` в конце. Бот при старте сам ставит кнопку меню «Анкета» (в `config.ini` секция `[webapp]` уже содержит `public_url = https://form.bginfo.eu`). Если закрыт файрвол: `sudo ufw allow 80/tcp && sudo ufw allow 443/tcp`.
+Ожидается: `{"ok":true}` и после локального, и после внешнего `healthz`. Бот при старте сам ставит кнопку меню «Анкета» (в `config.ini` секция `[webapp]` уже содержит `public_url = https://form.bginfo.eu`). Если закрыт файрвол: `sudo ufw allow 80/tcp && sudo ufw allow 443/tcp`.
 
 Certbot продлевает сертификат сам (systemd-таймер). Проверка: `sudo certbot renew --dry-run`.
 

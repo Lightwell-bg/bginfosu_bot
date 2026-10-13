@@ -516,12 +516,12 @@ curl -s http://127.0.0.1:8091/healthz   # порт: [admin] port в config.ini
    sudo nginx -t && sudo systemctl reload nginx
    certbot --version || sudo apt-get install -y certbot python3-certbot-nginx
    sudo certbot --nginx -d form.bginfo.eu --redirect
-   curl -sI https://form.bginfo.eu | head -1
+   curl -s https://form.bginfo.eu/healthz
    ```
 
-   Ожидается: `{"ok":true}` и `HTTP/2 200`. В боте появится кнопка меню «Анкета». Certbot продлевает сертификат сам (systemd-таймер); проверка: `sudo certbot renew --dry-run`.
+   Ожидается: `{"ok":true}` (локально и через https). В боте появится кнопка меню «Анкета». Certbot продлевает сертификат сам (systemd-таймер); проверка: `sudo certbot renew --dry-run`.
 
-2. Альтернатива только для сервера со свободными 80/443 (`sudo ss -ltnp | grep -E ':(80|443)b'` выводит пусто): `sudo docker compose --profile caddy up -d caddy`. Подробности: [DEPLOY.md](DEPLOY.md), пункт 7a.
+2. Альтернатива только для сервера со свободными 80/443 (`sudo ss -ltnp | grep -E ':(80|443)\b'` выводит пусто): `sudo docker compose --profile caddy up -d caddy`. Подробности: [DEPLOY.md](DEPLOY.md), пункт 7a.
 
 3. Локально (Windows, PowerShell, venv активирован) API мини-аппа запускается так:
 

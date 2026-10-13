@@ -64,10 +64,10 @@ sudo ln -sf /etc/nginx/sites-available/form.bginfo.eu /etc/nginx/sites-enabled/f
 sudo nginx -t && sudo systemctl reload nginx
 certbot --version || sudo apt-get install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d form.bginfo.eu --redirect
-curl -sI https://form.bginfo.eu | head -1
+curl -s https://form.bginfo.eu/healthz
 ```
 
-  certbot продлевает сертификат сам (systemd-таймер); проверка: `sudo certbot renew --dry-run`. Nginx — веб-сервер на хосте, certbot — получает и вписывает сертификат Let's Encrypt, Caddy — альтернативный веб-сервер. Альтернатива только при свободных портах 80/443 (`sudo ss -ltnp | grep -E ':(80|443)b'`): `sudo docker compose --profile caddy up -d caddy`.
+  certbot продлевает сертификат сам (systemd-таймер); проверка: `sudo certbot renew --dry-run`. Nginx — веб-сервер на хосте, certbot — получает и вписывает сертификат Let's Encrypt, Caddy — альтернативный веб-сервер. Альтернатива только при свободных портах 80/443 (`sudo ss -ltnp | grep -E ':(80|443)\b'`): `sudo docker compose --profile caddy up -d caddy`.
 - `config.ini`, секция `[webapp]`: `host`, `port`, `public_url`, `init_data_ttl_hours`, `send_result_to_chat`. Новых переменных `.env` нет: подпись Telegram проверяется существующим `TELEGRAM_BOT_TOKEN`.
 - Бот сам ставит кнопку меню «Анкета», если задан `public_url`, и добавляет в приветствие кнопку «Заполнить в форме». Настраивать BotFather (`/setmenubutton`) не нужно.
 - Telegram открывает мини-аппы только по HTTPS, поэтому интерфейс локально можно посмотреть только через туннель (например, `cloudflared`); локально `python -m bginfo.webapp` полезен для API и тестов.

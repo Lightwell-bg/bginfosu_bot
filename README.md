@@ -64,10 +64,10 @@ sudo ln -sf /etc/nginx/sites-available/form.bginfo.eu /etc/nginx/sites-enabled/f
 sudo nginx -t && sudo systemctl reload nginx
 certbot --version || sudo apt-get install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d form.bginfo.eu --redirect
-curl -sI https://form.bginfo.eu | head -1
+curl -s https://form.bginfo.eu/healthz
 ```
 
-  certbot renews the certificate automatically (systemd timer); check with `sudo certbot renew --dry-run`. Alternative only when ports 80/443 are free (`sudo ss -ltnp | grep -E ':(80|443)b'`): `sudo docker compose --profile caddy up -d caddy`.
+  certbot renews the certificate automatically (systemd timer); check with `sudo certbot renew --dry-run`. Alternative only when ports 80/443 are free (`sudo ss -ltnp | grep -E ':(80|443)\b'`): `sudo docker compose --profile caddy up -d caddy`.
 - `config.ini`, section `[webapp]`: `host`, `port`, `public_url`, `init_data_ttl_hours`, `send_result_to_chat`. No new `.env` variables: the Telegram signature check uses the existing `TELEGRAM_BOT_TOKEN`.
 - The bot sets the "Анкета" menu button itself when `public_url` is set, and adds the "Fill in the form" button to the welcome message. Configuring BotFather (`/setmenubutton`) is not needed.
 - Telegram opens Mini Apps only over HTTPS, so the UI can be tried locally only through a tunnel (for example `cloudflared`); locally `python -m bginfo.webapp` is useful for the API and tests.
