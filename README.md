@@ -50,9 +50,24 @@ Details about the requests: [PROMPTS.md](PROMPTS.md) (Russian).
 
 The same questionnaire and calculation as in the bot, shown as form screens inside Telegram. The server runs the same `engine.dialog.Dialog`, the client (`src/bginfo/webapp/static/`, plain HTML/CSS/JS, no build) only draws the screens. The session is shared with the bot: what was started in the chat continues in the form and back. The result is shown in the form and also sent as a copy to the user's private chat with the bot (`[webapp] send_result_to_chat`).
 
-- Services: `webapp` (FastAPI, `python -m bginfo.webapp`, listens on `127.0.0.1:8092`) and `caddy` (HTTPS with a Let's Encrypt certificate, config in `deploy/Caddyfile`: `form.bginfo.eu` proxied to `127.0.0.1:8092`). Both use `network_mode: host`.
-- DNS: create an A record `form.bginfo.eu` -> `37.27.13.102`.
-- Ports 80 and 443 on the server must be free for Caddy. Check: `sudo ss -ltnp | grep -E ':(80|443)\b'`. If an existing nginx or another web server holds them, do not start `caddy`; add a virtual host for `form.bginfo.eu` in that server that proxies to `127.0.0.1:8092` (and run `docker compose up -d --build bot admin webapp`).
+- Services: `webapp` (FastAPI, `python -m bginfo.webapp`, listens on `127.0.0.1:8092`, `network_mode: host`). HTTPS is served by a reverse proxy in front of it: on the production server this is the host's own nginx (config `deploy/nginx/form.bginfo.eu.conf`) plus certbot for the Let's Encrypt certificate. The `caddy` compose service (`deploy/Caddyfile`) is an alternative for servers without their own web server and is not started by plain `docker compose up -d` (profile `caddy`).
+- DNS: the A record `form.bginfo.eu` -> `SERVER_IP` already works.
+- Deploy with the host nginx (steps in order):
+
+```bash
+cd /opt/bginfo-bot && git pull
+sudo docker compose --profile ops run --rm backup
+sudo docker compose up -d --build
+curl -s http://127.0.0.1:8092/healthz
+sudo cp deploy/nginx/form.bginfo.eu.conf /etc/nginx/sites-available/form.bginfo.eu
+sudo ln -sf /etc/nginx/sites-available/form.bginfo.eu /etc/nginx/sites-enabled/form.bginfo.eu
+sudo nginx -t && sudo systemctl reload nginx
+certbot --version || sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d form.bginfo.eu --redirect
+curl -sI https://form.bginfo.eu | head -1
+```
+
+  certbot renews the certificate automatically (systemd timer); check with `sudo certbot renew --dry-run`. Alternative only when ports 80/443 are free (`sudo ss -ltnp | grep -E ':(80|443)b'`): `sudo docker compose --profile caddy up -d caddy`.
 - `config.ini`, section `[webapp]`: `host`, `port`, `public_url`, `init_data_ttl_hours`, `send_result_to_chat`. No new `.env` variables: the Telegram signature check uses the existing `TELEGRAM_BOT_TOKEN`.
 - The bot sets the "Анкета" menu button itself when `public_url` is set, and adds the "Fill in the form" button to the welcome message. Configuring BotFather (`/setmenubutton`) is not needed.
 - Telegram opens Mini Apps only over HTTPS, so the UI can be tried locally only through a tunnel (for example `cloudflared`); locally `python -m bginfo.webapp` is useful for the API and tests.
@@ -71,7 +86,7 @@ src/bginfo/
   seed/              initial content (YAML), loader, demo database builder
   db/                SQLite connection and migrations
   ops/               backup/restore, .env check
-deploy/              Caddyfile for the Mini App (form.bginfo.eu)
+deploy/              nginx config and Caddyfile (alternative) for the Mini App (form.bginfo.eu)
 scripts/             live OpenRouter checks (smoke_live.py, jev_eval.py)
 tests/               tests (pytest), JEV evaluation cases (tests/jev_eval/cases.yaml)
 docs/                documentation (see below)

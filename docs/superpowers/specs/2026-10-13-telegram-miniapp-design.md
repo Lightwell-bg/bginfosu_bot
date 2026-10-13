@@ -8,7 +8,7 @@
 - В форме есть поле «Расскажите своими словами»: JEV предзаполняет ответы, человек проверяет.
   Объяснение результата — как в боте (тот же `Explainer`, те же лимиты и бюджет).
 - Результат показывается в мини-аппе И копией приходит в личный чат с ботом; учитывается в статистике админки.
-- HTTPS-домен: `form.bginfo.eu` → сервер 37.27.13.102, сертификат Let's Encrypt через Caddy.
+- HTTPS-домен: `form.bginfo.eu` → IP сервера, сертификат Let's Encrypt через nginx хоста и certbot (Caddy — альтернатива).
 
 ## Выбранный подход: сервер ведёт анкету, мини-апп рисует экраны
 
@@ -99,12 +99,8 @@ a[href^=https:|http:]` (остальное — текстом), `\n` → `<br>`;
 
 ### 4. Развёртывание
 
-- `docker-compose.yml`: сервис `webapp` (`network_mode: host`, healthcheck `/healthz`) и сервис `caddy`
-  (`caddy:2`, `network_mode: host`, `Caddyfile` из репозитория: `form.bginfo.eu { reverse_proxy
-  127.0.0.1:8092 }`, volume для сертификатов). Порты 80/443 на сервере должны быть свободны —
-  в инструкции перед запуском проверка `ss -ltnp`; если их держит другой веб-сервер, вместо caddy
-  добавляется его виртуальный хост на `127.0.0.1:8092`.
-- DNS: A-запись `form.bginfo.eu → 37.27.13.102` (сейчас её нет).
+- `docker-compose.yml`: сервис `webapp` (`network_mode: host`, healthcheck `/healthz`). На боевом сервере IP_СЕРВЕРА порты 80/443 уже занимает nginx хоста (не Docker), поэтому мини-апп выставляется через него: `deploy/nginx/form.bginfo.eu.conf` (HTTP-блок с `proxy_pass` на `127.0.0.1:8092`), HTTPS и сертификат Let's Encrypt добавляет `certbot --nginx -d form.bginfo.eu --redirect`, продление автоматическое (systemd-таймер). Сервис `caddy` (`caddy:2.8`, `Caddyfile` из репозитория) оставлен как альтернатива для серверов без своего веб-сервера и вынесен в профиль `caddy` (`docker compose --profile caddy up -d caddy`), обычным `up -d` не стартует.
+- DNS: A-запись `form.bginfo.eu → IP_СЕРВЕРА` (уже работает).
 - Бот при старте, если задан `[webapp] public_url`, ставит кнопку меню `MenuButtonWebApp("Анкета", url)`.
 - BotFather не обязателен (кнопка меню и inline-кнопка работают по URL).
 - `config.ini [webapp]`: `host`, `port`, `public_url`, `init_data_ttl_hours`, `send_result_to_chat`.

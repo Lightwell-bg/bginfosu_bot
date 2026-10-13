@@ -1,3 +1,5 @@
+# Альтернатива для серверов без своего веб-сервера на 80/443 (docker compose --profile caddy up -d caddy).
+# На боевом сервере используется nginx хоста: deploy/nginx/form.bginfo.eu.conf
 form.bginfo.eu {
 	encode gzip
 	reverse_proxy 127.0.0.1:8092

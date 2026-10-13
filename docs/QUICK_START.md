@@ -502,37 +502,28 @@ curl -s http://127.0.0.1:8091/healthz   # порт: [admin] port в config.ini
 
 ## Часть C2. Мини-апп Telegram (форма) на form.bginfo.eu
 
-Новых переменных `.env` нет.
+Новых переменных `.env` нет. Коротко: nginx — веб-сервер на хосте (держит порты 80/443), certbot — получает бесплатный сертификат Let's Encrypt и вписывает его в nginx, Caddy — альтернативный веб-сервер, нужен только если своего веб-сервера на 80/443 нет. DNS (A-запись `form.bginfo.eu` -> `IP_СЕРВЕРА`) уже работает.
 
-1. У регистратора домена создайте A-запись `form.bginfo.eu` -> `37.27.13.102`. Проверка на сервере:
-
-   ```bash
-   dig +short form.bginfo.eu
-   ```
-
-   Ожидается: `37.27.13.102`.
-
-2. Проверьте, что порты 80 и 443 свободны (пустой вывод — свободны).
-
-   ```bash
-   sudo ss -ltnp | grep -E ':(80|443)\b'
-   ```
-
-   Если их держит nginx или другой веб-сервер, `caddy` не запускайте: проксируйте `form.bginfo.eu` на `127.0.0.1:8092` в нём и используйте `docker compose up -d --build bot admin webapp` (см. [DEPLOY.md](DEPLOY.md), пункт 7a).
-
-3. Выкатите и проверьте.
+1. Выкатите и поднимите HTTPS через nginx хоста (по порядку):
 
    ```bash
    cd /opt/bginfo-bot && git pull
-   docker compose up -d --build
-   docker compose ps
+   sudo docker compose --profile ops run --rm backup
+   sudo docker compose up -d --build
    curl -s http://127.0.0.1:8092/healthz
+   sudo cp deploy/nginx/form.bginfo.eu.conf /etc/nginx/sites-available/form.bginfo.eu
+   sudo ln -sf /etc/nginx/sites-available/form.bginfo.eu /etc/nginx/sites-enabled/form.bginfo.eu
+   sudo nginx -t && sudo systemctl reload nginx
+   certbot --version || sudo apt-get install -y certbot python3-certbot-nginx
+   sudo certbot --nginx -d form.bginfo.eu --redirect
    curl -sI https://form.bginfo.eu | head -1
    ```
 
-   Ожидается: `webapp` `(healthy)`, `caddy` `Up`, `{"ok":true}`, `HTTP/2 200`. В боте появится кнопка меню «Анкета».
+   Ожидается: `{"ok":true}` и `HTTP/2 200`. В боте появится кнопка меню «Анкета». Certbot продлевает сертификат сам (systemd-таймер); проверка: `sudo certbot renew --dry-run`.
 
-4. Локально (Windows, PowerShell, venv активирован) API мини-аппа запускается так:
+2. Альтернатива только для сервера со свободными 80/443 (`sudo ss -ltnp | grep -E ':(80|443)b'` выводит пусто): `sudo docker compose --profile caddy up -d caddy`. Подробности: [DEPLOY.md](DEPLOY.md), пункт 7a.
+
+3. Локально (Windows, PowerShell, venv активирован) API мини-аппа запускается так:
 
    ```powershell
    python -m bginfo.webapp

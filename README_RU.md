@@ -50,9 +50,24 @@ httpx (OpenRouter), argon2-cffi (пароль админки), Docker Compose (�
 
 Та же анкета и тот же расчёт, что в боте, но в виде экранов формы внутри Telegram. Сервер прогоняет тот же `engine.dialog.Dialog`, клиент (`src/bginfo/webapp/static/`, чистые HTML/CSS/JS без сборки) только рисует экраны. Сессия общая с ботом: начатое в чате продолжается в форме и наоборот. Результат показывается в форме и копией приходит в личный чат пользователя с ботом (`[webapp] send_result_to_chat`).
 
-- Сервисы: `webapp` (FastAPI, `python -m bginfo.webapp`, слушает `127.0.0.1:8092`) и `caddy` (HTTPS с сертификатом Let's Encrypt, конфиг `deploy/Caddyfile`: `form.bginfo.eu` проксируется на `127.0.0.1:8092`). Оба с `network_mode: host`.
-- DNS: создайте A-запись `form.bginfo.eu` -> `37.27.13.102`.
-- Порты 80 и 443 на сервере должны быть свободны для Caddy. Проверка: `sudo ss -ltnp | grep -E ':(80|443)\b'`. Если их держит существующий nginx или другой веб-сервер, `caddy` не запускайте; добавьте в том сервере виртуальный хост `form.bginfo.eu` с проксированием на `127.0.0.1:8092` (и запускайте `docker compose up -d --build bot admin webapp`).
+- Сервисы: `webapp` (FastAPI, `python -m bginfo.webapp`, слушает `127.0.0.1:8092`, `network_mode: host`). HTTPS отдаёт обратный прокси перед ним: на боевом сервере это nginx хоста (конфиг `deploy/nginx/form.bginfo.eu.conf`) и certbot для сертификата Let's Encrypt. Сервис `caddy` в compose (`deploy/Caddyfile`) — альтернатива для серверов без своего веб-сервера, обычным `docker compose up -d` не запускается (профиль `caddy`).
+- DNS: A-запись `form.bginfo.eu` -> `IP_СЕРВЕРА` уже работает.
+- Выкатка с nginx хоста (шаги по порядку):
+
+```bash
+cd /opt/bginfo-bot && git pull
+sudo docker compose --profile ops run --rm backup
+sudo docker compose up -d --build
+curl -s http://127.0.0.1:8092/healthz
+sudo cp deploy/nginx/form.bginfo.eu.conf /etc/nginx/sites-available/form.bginfo.eu
+sudo ln -sf /etc/nginx/sites-available/form.bginfo.eu /etc/nginx/sites-enabled/form.bginfo.eu
+sudo nginx -t && sudo systemctl reload nginx
+certbot --version || sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d form.bginfo.eu --redirect
+curl -sI https://form.bginfo.eu | head -1
+```
+
+  certbot продлевает сертификат сам (systemd-таймер); проверка: `sudo certbot renew --dry-run`. Nginx — веб-сервер на хосте, certbot — получает и вписывает сертификат Let's Encrypt, Caddy — альтернативный веб-сервер. Альтернатива только при свободных портах 80/443 (`sudo ss -ltnp | grep -E ':(80|443)b'`): `sudo docker compose --profile caddy up -d caddy`.
 - `config.ini`, секция `[webapp]`: `host`, `port`, `public_url`, `init_data_ttl_hours`, `send_result_to_chat`. Новых переменных `.env` нет: подпись Telegram проверяется существующим `TELEGRAM_BOT_TOKEN`.
 - Бот сам ставит кнопку меню «Анкета», если задан `public_url`, и добавляет в приветствие кнопку «Заполнить в форме». Настраивать BotFather (`/setmenubutton`) не нужно.
 - Telegram открывает мини-аппы только по HTTPS, поэтому интерфейс локально можно посмотреть только через туннель (например, `cloudflared`); локально `python -m bginfo.webapp` полезен для API и тестов.
@@ -71,7 +86,7 @@ src/bginfo/
   seed/              начальное наполнение (YAML), загрузка, сборка демо-базы
   db/                подключение SQLite и миграции
   ops/               бэкап/восстановление, проверка .env
-deploy/              Caddyfile для мини-аппа (form.bginfo.eu)
+deploy/              конфиг nginx и Caddyfile (альтернатива) для мини-аппа (form.bginfo.eu)
 scripts/             живые проверки OpenRouter (smoke_live.py, jev_eval.py)
 tests/               тесты (pytest), набор примеров для оценки JEV (tests/jev_eval/cases.yaml)
 docs/                документация (см. ниже)

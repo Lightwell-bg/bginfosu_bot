@@ -39,7 +39,7 @@ services:
   webapp:
     <<: *common
     command: ["python", "-m", "bginfo.webapp"]
-    # слушает 127.0.0.1:8092 ([webapp] в config.ini), наружу только через caddy
+    # слушает 127.0.0.1:8092 ([webapp] в config.ini), наружу только через обратный прокси (nginx хоста или caddy)
     network_mode: host
     healthcheck:
       # порт 8092 совпадает с [webapp] port в config.ini; при смене порта поправьте и здесь, и в deploy/Caddyfile
@@ -52,6 +52,8 @@ services:
   caddy:
     image: caddy:2.8
     restart: unless-stopped
+    # Только если на сервере нет своего веб-сервера на 80/443; на боевом сервере используется nginx хоста (deploy/nginx/)
+    profiles: ["caddy"]
     # нужны свободные порты 80/443 на сервере (Let's Encrypt)
     network_mode: host
     volumes:

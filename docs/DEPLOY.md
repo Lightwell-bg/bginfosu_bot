@@ -142,45 +142,32 @@ sudo systemctl status caddy --no-pager | head -5
 
 ## 7a. Мини-апп Telegram (форма) на form.bginfo.eu
 
-Сервисы `webapp` (API и клиент, `127.0.0.1:8092`) и `caddy` (HTTPS, сертификат Let's Encrypt) уже описаны в `docker-compose.yml`; конфиг Caddy — `deploy/Caddyfile`. Новых переменных `.env` нет. Это отдельно от пункта 7 (Caddy на хосте для админки): не запускайте оба Caddy одновременно, порты 80/443 одни.
+Сервис `webapp` (API и клиент, `127.0.0.1:8092`) описан в `docker-compose.yml`. Наружу его отдаёт по HTTPS обратный прокси. Коротко о названиях: nginx — веб-сервер, уже стоящий на хосте и занимающий порты 80/443; certbot — программа, которая получает бесплатный сертификат Let's Encrypt и вписывает его в nginx; Caddy — другой веб-сервер, который сам получает сертификат (нужен, только если на сервере нет своего веб-сервера). На боевом сервере порты 80/443 держит nginx хоста, поэтому основной путь — nginx + certbot (конфиг `deploy/nginx/form.bginfo.eu.conf`). Сервис `caddy` в compose вынесен в профиль `caddy` и обычным `docker compose up -d` не запускается. Новых переменных `.env` нет.
 
-1. DNS: у регистратора домена `bginfo.eu` создайте A-запись `form.bginfo.eu` -> `37.27.13.102` и дождитесь, пока она станет видна:
+DNS: A-запись `form.bginfo.eu` -> `IP_СЕРВЕРА` уже работает (проверка: `dig +short form.bginfo.eu`, ожидается `IP_СЕРВЕРА`).
 
-   ```bash
-   dig +short form.bginfo.eu
-   ```
+Основной путь (nginx на хосте), по порядку:
 
-   Ожидается: `37.27.13.102`.
+```bash
+cd /opt/bginfo-bot && git pull
+sudo docker compose --profile ops run --rm backup
+sudo docker compose up -d --build
+curl -s http://127.0.0.1:8092/healthz
+sudo cp deploy/nginx/form.bginfo.eu.conf /etc/nginx/sites-available/form.bginfo.eu
+sudo ln -sf /etc/nginx/sites-available/form.bginfo.eu /etc/nginx/sites-enabled/form.bginfo.eu
+sudo nginx -t && sudo systemctl reload nginx
+certbot --version || sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d form.bginfo.eu --redirect
+curl -sI https://form.bginfo.eu | head -1
+```
 
-2. Порты 80 и 443 должны быть свободны:
+Ожидается: `{"ok":true}` после `healthz` и `HTTP/2 200` в конце. Бот при старте сам ставит кнопку меню «Анкета» (в `config.ini` секция `[webapp]` уже содержит `public_url = https://form.bginfo.eu`). Если закрыт файрвол: `sudo ufw allow 80/tcp && sudo ufw allow 443/tcp`.
 
-   ```bash
-   sudo ss -ltnp | grep -E ':(80|443)\b'
-   ```
+Certbot продлевает сертификат сам (systemd-таймер). Проверка: `sudo certbot renew --dry-run`.
 
-   Пустой вывод — свободны. Если их держит nginx, Caddy из пункта 7 или другой веб-сервер, сервис `caddy` из compose не запускайте: добавьте в существующий веб-сервер виртуальный хост `form.bginfo.eu` с `proxy_pass`/`reverse_proxy` на `127.0.0.1:8092`, а контейнеры поднимайте командой `docker compose up -d --build bot admin webapp`. При необходимости откройте порты: `sudo ufw allow 80/tcp && sudo ufw allow 443/tcp`.
+Альтернатива (Caddy) — только если порты 80/443 свободны (`sudo ss -ltnp | grep -E ':(80|443)\b'` выводит пусто): после `sudo docker compose up -d --build` выполните `sudo docker compose --profile caddy up -d caddy`; конфиг — `deploy/Caddyfile`. Не запускайте Caddy одновременно с nginx и с Caddy из пункта 7: порты 80/443 одни.
 
-3. Запуск (в `config.ini` секция `[webapp]` уже содержит `public_url = https://form.bginfo.eu`):
-
-   ```bash
-   cd /opt/bginfo-bot
-   git pull
-   docker compose up -d --build
-   docker compose ps
-   ```
-
-   Ожидается: `webapp` `(healthy)`, `caddy` `Up`. Бот при старте сам ставит кнопку меню «Анкета».
-
-4. Проверка:
-
-   ```bash
-   curl -s http://127.0.0.1:8092/healthz
-   curl -sI https://form.bginfo.eu | head -1
-   ```
-
-   Ожидается: `{"ok":true}` и `HTTP/2 200`. Дальше откройте бота в Telegram и нажмите кнопку меню «Анкета».
-
-Логи: `docker compose logs --tail=100 webapp caddy`. Порт 8092 указан в `[webapp] port` (`config.ini`), `deploy/Caddyfile` и healthcheck в `docker-compose.yml`; при смене порта поправьте все три места.
+Логи: `sudo docker compose logs --tail=100 webapp`. Порт 8092 указан в `[webapp] port` (`config.ini`), `deploy/nginx/form.bginfo.eu.conf`, `deploy/Caddyfile` и healthcheck в `docker-compose.yml`; при смене порта поправьте все места.
 
 ## 8. Логи, состояние, проверка
 

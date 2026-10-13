@@ -65,3 +65,7 @@
 ## Telegram Mini App, этап 2 (2026-10-13)
 
 Готов клиент `src/bginfo/webapp/static/` (index.html, app.css, app.js: вопросы, свободный текст, обзор, результат, универсальный экран, санитайзер HTML), `deploy/Caddyfile`, сервисы `webapp` и `caddy` в `docker-compose.yml`, документация (README, QUICK_START часть C2, DEPLOY 7a). Не проверено: docker compose config (Docker локально нет), работа клиента внутри живого Telegram; нужна A-запись `form.bginfo.eu` и свободные порты 80/443 на сервере.
+
+## Mini App за nginx хоста (2026-10-13)
+
+На боевом сервере порты 80/443 держит nginx хоста: добавлен `deploy/nginx/form.bginfo.eu.conf` (+ certbot), сервис `caddy` в compose вынесен в профиль `caddy`, документация (DEPLOY 7a, QUICK_START C2, README, README_RU, спецификация) обновлена. Не проверено на сервере: выкатка и выпуск сертификата.
