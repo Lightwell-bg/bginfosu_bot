@@ -127,6 +127,9 @@ breakdown, five-hour and seven-day before/after values and delta in percentage
 points. The in-answer reading is provisional and excludes anything not yet
 written (including the final answer). Stop saves the end report locally and
 shows hook feedback; a manual report refresh can include a late transcript flush.
+Include the cumulative session total printed by the meter. For a multi-prompt
+task, use `session --session SESSION_ID` for all observed requests so far; never
+add run reports or use an agent's final context-size summary as cumulative usage.
 
 Never convert API dollars or token counts to subscription percentages. Limit
 differences are account-wide observations, possibly cached/rounded; parallel
@@ -149,7 +152,10 @@ for a pure question it is fine to explain both readings.
 Record user corrections and repeated review lessons in Project rules, preserving
 existing entries. Do not edit global CLAUDE.md or files outside the project
 without an explicit request. Keep README/config templates current. Use Write/Edit
-for multiline changes, not shell heredoc rewriting. Never expose or overwrite
+for file changes, including one-line replacements. Do not use `sed -i`, shell
+heredocs, or shell replacements to rewrite source/docs: escaping and encoding
+can corrupt Cyrillic text and backslashes. Include this rule in executor briefs.
+Never expose or overwrite
 secrets; preserve real `.env` values and keep `.env.example` structurally aligned
 when adding environment variables. Never commit secrets or local usage data.
 
